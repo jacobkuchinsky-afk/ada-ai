@@ -1,0 +1,214 @@
+.main {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  padding: 40px 20px;
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.loading {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--foreground);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  padding: 48px 40px;
+  background: rgba(18, 18, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  text-align: center;
+}
+
+.iconContainer {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon {
+  width: 36px;
+  height: 36px;
+  color: var(--foreground);
+}
+
+.title {
+  font-family: var(--font-coiny), cursive;
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--foreground);
+  margin-bottom: 16px;
+}
+
+.message {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: 0 0 4px;
+}
+
+.email {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--foreground);
+  margin: 0 0 16px;
+  word-break: break-all;
+}
+
+.instruction {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 28px;
+}
+
+.error {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ff6b6b;
+  padding: 12px;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  margin: 0 0 16px;
+}
+
+.success {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #51cf66;
+  padding: 12px;
+  background: rgba(81, 207, 102, 0.1);
+  border-radius: 8px;
+  margin: 0 0 16px;
+}
+
+.resendButton {
+  width: 100%;
+  padding: 14px 24px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--button-text);
+  background: linear-gradient(180deg, #ffffff 0%, #e8e8e8 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  
+  /* 3D effect */
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.05),
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.25);
+  
+  transform: translateY(0) perspective(1000px) rotateX(0deg);
+}
+
+.resendButton:hover:not(:disabled) {
+  transform: translateY(-2px) perspective(1000px) rotateX(2deg);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.35),
+    0 16px 32px rgba(0, 0, 0, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.resendButton:active:not(:disabled) {
+  transform: translateY(2px) perspective(1000px) rotateX(-1deg);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 2px 6px rgba(0, 0, 0, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.resendButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.buttonSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: var(--button-text);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.logoutButton {
+  margin-top: 16px;
+  background: none;
+  border: none;
+  font-family: var(--font-ubuntu), sans-serif;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s ease;
+}
+
+.logoutButton:hover {
+  color: var(--foreground);
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 36px 24px;
+    border-radius: 16px;
+  }
+  
+  .title {
+    font-size: 24px;
+  }
+}
