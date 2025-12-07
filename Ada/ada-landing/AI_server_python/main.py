@@ -12,12 +12,9 @@ load_dotenv()
 
 app = Flask(__name__)
 
-# CORS configuration - allow localhost for development and Vercel for production
-CORS(app, origins=[
-    "http://localhost:3000",
-    "https://*.vercel.app",
-    os.getenv('FRONTEND_URL', '')  # Allow custom frontend URL from env
-], supports_credentials=True)
+# CORS configuration - allow all origins for the API
+# This is safe because we don't use cookies/sessions for auth
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 current_date = date.today()
 
