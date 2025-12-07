@@ -378,12 +378,19 @@ export default function DashboardPage() {
         setStatusMessage('');
 
         // Update the assistant message with error
+        const errorMessage = (error as Error).message;
+        const isConnectionError = errorMessage.includes('fetch') || errorMessage.includes('network') || errorMessage.includes('Failed');
+        
+        const friendlyMessage = isConnectionError
+          ? `**Server is waking up!** ☕\n\nOur server goes to sleep when not in use to save resources. Please wait about 30-60 seconds and try again.\n\nSorry for the inconvenience!`
+          : `Sorry, I encountered an error: ${errorMessage}`;
+        
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantMessageId
               ? {
                   ...m,
-                  content: `Sorry, I encountered an error: ${(error as Error).message}. Please make sure the AI server is running on port 5000.`,
+                  content: friendlyMessage,
                   isStreaming: false,
                   currentStatus: null,
                 }
