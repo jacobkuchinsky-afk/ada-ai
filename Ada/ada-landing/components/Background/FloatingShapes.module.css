@@ -1,0 +1,278 @@
+.container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.shape {
+  position: absolute;
+  border-radius: 60% 40% 50% 70% / 50% 60% 40% 50%;
+  filter: blur(0.5px);
+  will-change: transform;
+}
+
+/* Large shapes - more movement */
+.shape1 {
+  width: 420px;
+  height: 370px;
+  background: #151515;
+  top: -120px;
+  left: -60px;
+  animation: drift1 12s ease-in-out infinite;
+}
+
+.shape2 {
+  width: 380px;
+  height: 420px;
+  background: #1c1c1c;
+  top: 15%;
+  right: -100px;
+  border-radius: 40% 60% 70% 30% / 60% 40% 50% 50%;
+  animation: drift2 14s ease-in-out infinite;
+}
+
+.shape3 {
+  width: 480px;
+  height: 400px;
+  background: #131313;
+  bottom: -80px;
+  left: 25%;
+  border-radius: 50% 50% 40% 60% / 40% 60% 50% 50%;
+  animation: drift3 11s ease-in-out infinite;
+}
+
+.shape4 {
+  width: 400px;
+  height: 450px;
+  background: #181818;
+  top: 45%;
+  left: -120px;
+  border-radius: 70% 30% 60% 40% / 50% 50% 50% 50%;
+  animation: drift4 15s ease-in-out infinite;
+}
+
+.shape5 {
+  width: 350px;
+  height: 320px;
+  background: #1b1b1b;
+  top: -100px;
+  right: 20%;
+  border-radius: 45% 55% 50% 50% / 55% 45% 55% 45%;
+  animation: drift5 13s ease-in-out infinite;
+}
+
+.shape6 {
+  width: 420px;
+  height: 380px;
+  background: #161616;
+  bottom: 5%;
+  right: -80px;
+  border-radius: 55% 45% 45% 55% / 45% 55% 45% 55%;
+  animation: drift6 16s ease-in-out infinite;
+}
+
+/* Medium shapes */
+.shape7 {
+  width: 240px;
+  height: 220px;
+  background: #1a1a1a;
+  top: 32%;
+  left: 18%;
+  border-radius: 65% 35% 55% 45% / 45% 55% 35% 65%;
+  animation: drift7 10s ease-in-out infinite;
+}
+
+.shape8 {
+  width: 270px;
+  height: 250px;
+  background: #171717;
+  top: 58%;
+  right: 18%;
+  border-radius: 35% 65% 45% 55% / 55% 45% 65% 35%;
+  animation: drift8 12s ease-in-out infinite;
+}
+
+.shape9 {
+  width: 220px;
+  height: 200px;
+  background: #1d1d1d;
+  top: 12%;
+  left: 48%;
+  border-radius: 50% 50% 60% 40% / 40% 60% 40% 60%;
+  animation: drift9 11s ease-in-out infinite;
+}
+
+/* Small accent shapes */
+.shape10 {
+  width: 140px;
+  height: 120px;
+  background: #1a1a1a;
+  top: 75%;
+  left: 12%;
+  border-radius: 60% 40% 40% 60% / 60% 40% 60% 40%;
+  animation: drift10 9s ease-in-out infinite;
+}
+
+.shape11 {
+  width: 160px;
+  height: 145px;
+  background: #191919;
+  top: 42%;
+  right: 38%;
+  border-radius: 40% 60% 50% 50% / 50% 50% 60% 40%;
+  animation: drift11 10s ease-in-out infinite;
+}
+
+.shape12 {
+  width: 120px;
+  height: 130px;
+  background: #1c1c1c;
+  bottom: 25%;
+  left: 38%;
+  border-radius: 55% 45% 60% 40% / 40% 60% 45% 55%;
+  animation: drift12 8s ease-in-out infinite;
+}
+
+/* More dynamic animations with larger movement */
+@keyframes drift1 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(40px, -25px) scale(1.03) rotate(2deg);
+  }
+  50% {
+    transform: translate(60px, 10px) scale(0.98) rotate(-1deg);
+  }
+  75% {
+    transform: translate(20px, 30px) scale(1.02) rotate(1deg);
+  }
+}
+
+@keyframes drift2 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(-35px, 20px) scale(0.97) rotate(-2deg);
+  }
+  50% {
+    transform: translate(-50px, -15px) scale(1.04) rotate(1deg);
+  }
+  75% {
+    transform: translate(-20px, -35px) scale(0.99) rotate(-1deg);
+  }
+}
+
+@keyframes drift3 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(30px, 35px) scale(1.02) rotate(1deg);
+  }
+  50% {
+    transform: translate(-20px, 50px) scale(0.96) rotate(-2deg);
+  }
+  75% {
+    transform: translate(-40px, 20px) scale(1.03) rotate(1deg);
+  }
+}
+
+@keyframes drift4 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  25% {
+    transform: translate(-45px, -20px) scale(0.98) rotate(-1deg);
+  }
+  50% {
+    transform: translate(-30px, 25px) scale(1.04) rotate(2deg);
+  }
+  75% {
+    transform: translate(15px, 40px) scale(0.97) rotate(-1deg);
+  }
+}
+
+@keyframes drift5 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(25px, -40px) scale(1.03) rotate(3deg);
+  }
+  66% {
+    transform: translate(-30px, -20px) scale(0.98) rotate(-2deg);
+  }
+}
+
+@keyframes drift6 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  33% {
+    transform: translate(-35px, 30px) scale(0.97) rotate(-3deg);
+  }
+  66% {
+    transform: translate(20px, 45px) scale(1.02) rotate(2deg);
+  }
+}
+
+@keyframes drift7 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(50px, -35px) scale(1.05);
+  }
+}
+
+@keyframes drift8 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-45px, 40px) scale(0.95);
+  }
+}
+
+@keyframes drift9 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(35px, 45px) scale(1.04) rotate(4deg);
+  }
+}
+
+@keyframes drift10 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-55px, -25px) scale(0.94);
+  }
+}
+
+@keyframes drift11 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1) rotate(0deg);
+  }
+  50% {
+    transform: translate(40px, -50px) scale(1.06) rotate(-3deg);
+  }
+}
+
+@keyframes drift12 {
+  0%, 100% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-30px, 35px) scale(0.96);
+  }
+}

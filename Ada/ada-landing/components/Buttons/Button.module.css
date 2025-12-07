@@ -1,0 +1,86 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 36px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  user-select: none;
+  position: relative;
+  letter-spacing: 0.01em;
+}
+
+.primary {
+  background: linear-gradient(180deg, #ffffff 0%, #e8e8e8 100%);
+  background-color: var(--button-bg);
+  color: var(--button-text);
+  
+  /* 3D effect with layered shadows */
+  box-shadow: 
+    /* Top highlight */
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    /* Inner shadow for depth */
+    inset 0 -2px 4px rgba(0, 0, 0, 0.05),
+    /* Main shadow */
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    /* Soft ambient shadow */
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    /* Contact shadow */
+    0 2px 4px rgba(0, 0, 0, 0.25);
+  
+  /* Subtle 3D transform */
+  transform: translateY(0) perspective(1000px) rotateX(0deg);
+  transform-style: preserve-3d;
+}
+
+.primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+  pointer-events: none;
+}
+
+.primary:hover {
+  transform: translateY(-2px) perspective(1000px) rotateX(2deg);
+  
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.05),
+    0 8px 16px rgba(0, 0, 0, 0.35),
+    0 16px 32px rgba(0, 0, 0, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.button.pressed {
+  transform: translateY(2px) perspective(1000px) rotateX(-1deg);
+  
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 2px 6px rgba(0, 0, 0, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.button:focus {
+  outline: none;
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--foreground);
+  outline-offset: 3px;
+}
+
+@media (max-width: 768px) {
+  .button {
+    width: 100%;
+    padding: 14px 28px;
+  }
+}
