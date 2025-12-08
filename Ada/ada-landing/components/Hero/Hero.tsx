@@ -7,10 +7,9 @@ import Logo from '../Logo/Logo';
 
 interface HeroProps {
   opacity: number;
-  onAboutClick: () => void;
 }
 
-export default function Hero({ opacity, onAboutClick }: HeroProps) {
+export default function Hero({ opacity }: HeroProps) {
   return (
     <>
       <Logo />
@@ -26,9 +25,6 @@ export default function Hero({ opacity, onAboutClick }: HeroProps) {
           <p className={styles.tagline}>Your new search agent</p>
           
           <div className={styles.buttons}>
-            <Button variant="primary" onClick={onAboutClick}>
-              About Us
-            </Button>
             <Button variant="primary" href="/signup">
               Sign Up for Free
             </Button>
