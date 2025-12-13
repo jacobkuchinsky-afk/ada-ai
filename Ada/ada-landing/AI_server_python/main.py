@@ -279,8 +279,10 @@ def process_search(prompt, memory):
             "icon": "evaluating"
         }
         
+        # Combine search data for evaluation
+        eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
         good = ai(
-            "User prompt:" + prompt + " Information: " + str(search_data),
+            "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
             goodness_decided_prompt, True, general
         )
         
@@ -306,10 +308,13 @@ def process_search(prompt, memory):
         "icon": "generating"
     }
     
+    # Combine all search data into a single formatted string
+    combined_search_data = "\n\n=== COMBINED SEARCH RESULTS ===\n\n".join(search_data) if search_data else ""
+    
     if no_search:
-        prompt_text = "User question: " + prompt + " Search data: " + str(search_data) + " No data has been given just answer the users question truthfully"
+        prompt_text = "User question: " + prompt + "\n\nSearch data: " + combined_search_data + "\n\nNo data has been given just answer the users question truthfully"
     else:
-        prompt_text = "User question: " + prompt + " Search data: " + str(search_data)
+        prompt_text = "User question: " + prompt + "\n\nSearch data:\n" + combined_search_data
     
     instructions = main_prompt + " Memory from previous conversation: " + str(memory)
     
