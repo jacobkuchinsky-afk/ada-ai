@@ -1,6 +1,7 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import unquote, urlparse
+from urllib.parse import urlparse
+from duckduckgo_search import DDGS
 
 def extract_domain(url):
     """Extract domain name from URL for display."""
@@ -13,6 +14,7 @@ def extract_domain(url):
         return domain
     except:
         return url
+
 
 def search_and_scrape(search, result_number):
     """
@@ -27,56 +29,53 @@ def search_and_scrape(search, result_number):
     """
     results = []
     sources = []
-    
-    # Use DuckDuckGo HTML search (no API key needed)
-    search_url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(search)}"
+    links = []
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
     }
     
     try:
-        # Get search results
-        response = requests.get(search_url, headers=headers, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Extract URLs from search results - get more than needed to ensure we have enough
-        links = []
-        
-        # Try multiple selectors to find links
-        result_links = soup.find_all('a', class_='result__a')
-        if not result_links:
-            result_links = soup.find_all('a', href=True)
-        
-        for result in result_links:
-            href = result.get('href')
-            if href:
-                # Extract actual URL from DuckDuckGo redirect
-                if 'uddg=' in href:
-                    actual_url = href.split('uddg=')[1].split('&')[0]
-                    actual_url = unquote(actual_url)
-                    if actual_url.startswith('http') and actual_url not in links:
-                        links.append(actual_url)
-                elif href.startswith('http') and 'duckduckgo.com' not in href and href not in links:
-                    links.append(href)
-                    
-            # Stop when we have enough unique links
-            if len(links) >= result_number:
-                break
+        # Use duckduckgo-search library - much more reliable than scraping HTML
+        with DDGS() as ddgs:
+            search_results = list(ddgs.text(search, max_results=result_number))
+            
+            for result in search_results:
+                url = result.get('href') or result.get('link')
+                title = result.get('title', '')
+                snippet = result.get('body', '')
+                
+                if url and url.startswith('http'):
+                    links.append({
+                        'url': url,
+                        'title': title,
+                        'snippet': snippet
+                    })
         
         print(f"Found {len(links)} links to scrape")
         
-        # Scrape each website up to result_number
-        for i, url in enumerate(links[:result_number]):
+        # Scrape each website
+        for i, link_info in enumerate(links[:result_number]):
+            url = link_info['url']
+            title = link_info['title']
+            snippet = link_info['snippet']
+            
             print(f"Scraping {i+1}/{result_number}: {url}")
+            
             try:
                 page_response = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
                 page_response.raise_for_status()
                 page_soup = BeautifulSoup(page_response.content, 'html.parser')
                 
-                # Extract page title
-                title_tag = page_soup.find('title')
-                title = title_tag.get_text(strip=True) if title_tag else extract_domain(url)
+                # Extract page title if not already provided
+                if not title:
+                    title_tag = page_soup.find('title')
+                    title = title_tag.get_text(strip=True) if title_tag else extract_domain(url)
                 
                 # Truncate long titles
                 if len(title) > 80:
@@ -96,6 +95,10 @@ def search_and_scrape(search, result_number):
                 # Clean up whitespace
                 text = ' '.join(text.split())
                 
+                # Limit text length to avoid token issues
+                if len(text) > 15000:
+                    text = text[:15000] + "... [truncated]"
+                
                 # Add to sources list
                 source_info = {
                     'url': url,
@@ -109,22 +112,27 @@ def search_and_scrape(search, result_number):
                     'title': title,
                     'text': text
                 })
+                
             except Exception as e:
                 print(f"Error scraping {url}: {str(e)}")
+                # Still add the source with the snippet from search results
                 source_info = {
                     'url': url,
-                    'title': extract_domain(url),
-                    'domain': extract_domain(url),
-                    'error': str(e)
+                    'title': title or extract_domain(url),
+                    'domain': extract_domain(url)
                 }
                 sources.append(source_info)
+                
+                # Use snippet as fallback text
+                fallback_text = snippet if snippet else f'Error scraping: {str(e)}'
                 results.append({
                     'url': url,
-                    'title': extract_domain(url),
-                    'text': f'Error scraping: {str(e)}'
+                    'title': title or extract_domain(url),
+                    'text': fallback_text
                 })
         
     except Exception as e:
+        print(f"Search failed: {str(e)}")
         return {
             'sources': [],
             'full_text': f'Search failed: {str(e)}',
