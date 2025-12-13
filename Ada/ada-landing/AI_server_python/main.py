@@ -6,6 +6,7 @@ from datetime import date
 from dotenv import load_dotenv
 from openai import OpenAI
 import grabbers
+import concurrent.futures
 
 # Load environment variables
 load_dotenv()
@@ -20,7 +21,7 @@ current_date = date.today()
 
 # Model configurations
 general = "moonshotai/Kimi-K2-Instruct-0905"
-researcher = "deepseek-ai/DeepSeek-V3.2"
+researcher = "Qwen/Qwen3-235B-A22B"
 fast_general = "Qwen/Qwen3-235B-A22B"
 
 # Prompts
@@ -57,6 +58,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - Length: 3-10 words maximum (half to one sentence)
                     - Never use quotation marks (" or ')
                     - Focus on broad, findable information only (not specific tools or deep page content)
+                    - Please give 4 search queries seperated by ~ Example: "query1 ~ query2 ~ query3 ~ query4"
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
@@ -196,46 +198,78 @@ def process_search(prompt, memory):
         
         query = query.replace('"', "").strip()
         
-        # Step 2: Search - send search event with query
-        yield {
-            "type": "status", 
-            "message": f"Searching: {query[:60]}{'...' if len(query) > 60 else ''}", 
-            "step": 2, 
-            "icon": "searching"
-        }
+        # Split queries by ~ and search in parallel
+        queries = [q.strip() for q in query.split("~") if q.strip()]
         
-        # Send search event immediately with query (sources pending)
-        yield {
-            "type": "search",
-            "query": query,
-            "sources": [],
-            "iteration": iter_count + 1,
-            "status": "searching"
-        }
+        # If no valid queries after split, use original
+        if not queries:
+            queries = [query]
         
-        depth = 8
-        scrape_result = grabbers.search_and_scrape(query, int(depth))
-        sources = scrape_result.get('sources', [])
-        full_text = scrape_result.get('full_text', '')
+        depth = 8  # 8 sources per query
         
-        search_data.append(full_text)
+        # Step 2: Send initial searching status for each query
+        for q_idx, q in enumerate(queries):
+            yield {
+                "type": "status", 
+                "message": f"Searching ({q_idx + 1}/{len(queries)}): {q[:50]}{'...' if len(q) > 50 else ''}", 
+                "step": 2, 
+                "icon": "searching"
+            }
+            # Send search event immediately with query (sources pending)
+            yield {
+                "type": "search",
+                "query": q,
+                "sources": [],
+                "iteration": iter_count + 1,
+                "queryIndex": q_idx + 1,
+                "status": "searching"
+            }
         
-        # Create search entry for history
-        search_entry = {
-            "query": query,
-            "sources": sources,
-            "iteration": iter_count + 1
-        }
-        search_history.append(search_entry)
+        # Search all queries in parallel using ThreadPoolExecutor
+        def search_single_query(q):
+            return grabbers.search_and_scrape(q, depth)
         
-        # Send updated search event with sources
-        yield {
-            "type": "search",
-            "query": query,
-            "sources": sources,
-            "iteration": iter_count + 1,
-            "status": "complete"
-        }
+        # Store results with their query index for ordering
+        search_results = {}
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(queries)) as executor:
+            future_to_query = {executor.submit(search_single_query, q): (idx, q) for idx, q in enumerate(queries)}
+            
+            for future in concurrent.futures.as_completed(future_to_query):
+                idx, q = future_to_query[future]
+                try:
+                    scrape_result = future.result()
+                    search_results[idx] = (q, scrape_result)
+                except Exception as e:
+                    print(f"Error searching query '{q}': {e}")
+                    search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}'})
+        
+        # Process results in order and yield events
+        for idx in range(len(queries)):
+            q, scrape_result = search_results[idx]
+            sources = scrape_result.get('sources', [])
+            full_text = scrape_result.get('full_text', '')
+            
+            search_data.append(full_text)
+            
+            # Create search entry for history
+            search_entry = {
+                "query": q,
+                "sources": sources,
+                "iteration": iter_count + 1,
+                "queryIndex": idx + 1
+            }
+            search_history.append(search_entry)
+            
+            # Send updated search event with sources
+            yield {
+                "type": "search",
+                "query": q,
+                "sources": sources,
+                "iteration": iter_count + 1,
+                "queryIndex": idx + 1,
+                "status": "complete"
+            }
         
         # Step 3: Evaluate results
         yield {
