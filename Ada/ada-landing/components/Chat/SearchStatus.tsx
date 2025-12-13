@@ -15,6 +15,7 @@ export interface SearchEntry {
   query: string;
   sources: SourceInfo[];
   iteration: number;
+  queryIndex?: number;  // For parallel queries within same iteration
   status?: 'searching' | 'complete';
 }
 
