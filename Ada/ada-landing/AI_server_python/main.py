@@ -58,7 +58,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - Length: 3-10 words maximum (half to one sentence)
                     - Never use quotation marks (" or ')
                     - Focus on broad, findable information only (not specific tools or deep page content)
-                    - Please give 4 search queries seperated by ~ Example: "query1 ~ query2 ~ query3 ~ query4"
+                    - Please give 4 search queries seperated by ~ Example: "~query1 ~ query2 ~ query3 ~ query4"
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
@@ -184,12 +184,12 @@ def process_search(prompt, memory):
         if iter_count > 0:
             query = ai(
                 "User question: " + prompt + " Your original query: " + query + " Failed, please make a new better suited query.",
-                search_prompt, True, researcher
+                search_prompt, False, researcher
             )
         else:
             query = ai(
                 "User question:" + prompt + " Memory: " + str(memory),
-                search_prompt, True, researcher
+                search_prompt, False, researcher
             )
         
         if "<No searching needed>" in query:
@@ -283,7 +283,7 @@ def process_search(prompt, memory):
         eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
         good = ai(
             "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
-            goodness_decided_prompt, True, general
+            goodness_decided_prompt, False, general
         )
         
         # Convert to lowercase for case-insensitive matching
