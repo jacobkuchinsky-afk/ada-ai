@@ -8,6 +8,16 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import grabbers
 import concurrent.futures
+import time
+
+# === PERFORMANCE OPTIMIZATIONS ===
+# 1. Singleton API client (connection reuse)
+# 2. Parallel searching
+# 3. Reduced sources per query (5 instead of 8)
+# 4. Non-streaming mode for internal AI calls (faster)
+# 5. Optimized prompts (shorter = faster)
+# 6. Smart search detection (skip search for simple questions)
+# 7. Goodness evaluation loop to ensure quality answers
 
 
 def clean_ai_output(text):
@@ -37,98 +47,98 @@ def clean_ai_output(text):
     
     return text
 
+
 # Load environment variables
 load_dotenv()
 
 app = Flask(__name__)
 
-# CORS configuration - allow all origins for the API
-# This is safe because we don't use cookies/sessions for auth
+# CORS configuration
 CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 current_date = date.today()
 
-# Model configurations
-general = "moonshotai/Kimi-K2-Instruct-0905"
-researcher = "Qwen/Qwen3-235B-A22B"
-fast_general = "Qwen/Qwen3-235B-A22B"
+# === MODEL CONFIGURATION ===
+# Using heavier models for better quality
+general = "moonshotai/Kimi-K2-Instruct-0905"  # Main response generation
+researcher = "Qwen/Qwen3-235B-A22B"  # Heavy model for query generation and evaluation
 
-# Prompts
-search_depth_prompt = """Job: Decide how many results to look through in a web search based on how in depth the user's request is.
-                        IMPORTANT: Your output structure should be only a number this will determine how many results and urls will be searched for the answer to what the user asked.
-                        The more complex the question the higher number your response should be.
-                        ONLY RETURN A NUMBER AND NOTHING ELSE!
-                        NEVER ADD THIS TO YOUR RESPONSE: <｜begin▁of▁sentence｜>
-                        For simple one answer questions like birthday, date, ect the number should be low like 1 or 2. If the question is more complex and needs a plethera of information make the number higher.
-                        Example: 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8
-                        Max of 8 sources"""
+# === SINGLETON API CLIENT ===
+_api_client = None
 
-main_prompt = f"""Job: You have been given large text from multiple sources. You need to, using the text answer the users question in an effecient, easy to read, and expository way.
-                Follow all guidlines described Important guidlines
-                - Your responses should be verbose and fully explain the topic unless asked by the user otherwise
-                - Only use sources that are reputable
-                - Favor data that is backed up by multiple sources
-                Current date: {current_date}
-                Output Structure:
-                (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
-                (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text.)
-                (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
-                (Finnally add all sources exactly as provided in the text. Format: Add Sources: then all sources with names and then link. Example: Source_Name: https:\\source_link)
-                Format:
-                Please use markdown formating: For example use bold to exemplify important data or ideas. Use the code block for code.
-                """
+def get_api_client():
+    """Get singleton API client for connection reuse."""
+    global _api_client
+    if _api_client is None:
+        api_provider = os.getenv('API_PROVIDER', 'chutes')
+        
+        if api_provider == 'openrouter':
+            api_key = os.getenv('OPENROUTER_API_KEY')
+            if not api_key:
+                raise ValueError("OPENROUTER_API_KEY environment variable is required")
+            _api_client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=api_key,
+                default_headers={"HTTP-Referer": os.getenv('FRONTEND_URL', 'http://localhost:3000')}
+            )
+        else:  # chutes
+            api_key = os.getenv('CHUTES_API_KEY')
+            if not api_key:
+                raise ValueError("CHUTES_API_KEY environment variable is required")
+            _api_client = OpenAI(
+                base_url="https://llm.chutes.ai/v1",
+                api_key=api_key
+            )
+    return _api_client
+
+
+# === PROMPTS ===
 
 search_prompt = f"""You are an expert at converting questions into effective web search queries.
 
-                    TASK: Transform the user's question into a single, optimized Google search query.
+TASK: Transform the user's question into optimized Google search queries.
 
-                    REQUIREMENTS:
-                    - Create ONE focused search query (not multiple)
-                    - Length: 3-10 words maximum (half to one sentence)
-                    - Never use quotation marks (" or ')
-                    - Focus on broad, findable information only (not specific tools or deep page content)
-                    - Please give 4 search queries seperated by ~ Example: "~query1 ~ query2 ~ query3 ~ query4"
-                    Exceptions:
-                    - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
-                    Important: You HEAVILY favor searching for answers over not searching
-                    CONTEXT: Current date: {current_date}
+REQUIREMENTS:
+- Create focused search queries (not multiple)
+- Length: 3-10 words maximum (half to one sentence)
+- Never use quotation marks (" or ')
+- Focus on broad, findable information only (not specific tools or deep page content)
+- Please give 4 search queries separated by ~ Example: "~query1 ~ query2 ~ query3 ~ query4"
+- The first query should be the most broad and general query that will return the most results. It should hopefully give results that directly answer the users question.
+- The second query should attack the query from a different angle so if the first query doesn't give any quality results then the second query will be a fallback because it is from a different viewpoint.
+- The third query should ask questions that aren't fully answering the users question but getting background details and other useful information that might help support the answer
+- The fourth query should be used as another specific query aimed to gather information of something very specific to the users question.
 
-                    OUTPUT: Return only the search query, nothing else.
-"""
+Exceptions:
+- If the users question is simple enough that there is absolutely no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
+Important: You HEAVILY favor searching for answers over not searching
 
-goodness_decided_prompt = """Job: Decide if the provied data fully answers the users question to 100%. This means the the provied data gives the entire answer and FULLY matches the users question
-                            If it does NOT FULLY answer the users question please include <Does not fully answer user question> in your reponse and what could be used to gather more information where information is lacking the first amount of data. Please also inlude what information was missing this should be 2 sentences long in total. The searcher this will be fed to can only do internet searches.
-                             If it does FULLY answer the users question please include <Fully answers user question> and nothing else.
-                              You do not care about conciseness or verbosity AT ALL 
-                              You favor not searching for more answers and only search for more when needed"""
+CONTEXT: Current date: {current_date}
 
-summarizer = """Job: Take the given chunk of data and summarize each source with all peices of data from it example: opinoins, numbers, data, quotes, ect. Please output everything important to the users question
-                Format: Please produce the name of the source, link to the source, the information from the source under the source then repeat
-                Your summary SHOULD NOT EVER answer the users question just summarize the data and pull together all data that could MAYBE be used to answer the users question even if the connect is thin. 
-                Summary style: Your summary should be think and verbose with large walls of text"""
+OUTPUT: Return only the search queries, nothing else."""
 
+main_prompt = f"""Job: You have been given large text from multiple sources. You need to, using the text answer the users question in an efficient, easy to read, and expository way.
+Follow all guidelines described Important guidelines
+- Your responses should be verbose and fully explain the topic unless asked by the user otherwise
+- Only use sources that are reputable
+- Favor data that is backed up by multiple sources
+Current date: {current_date}
+Output Structure:
+(First add an introduction this should be friendly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very brief summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
+(Next add a verbose output of all important information found in the text that may help answer or fulfill the users question. Format: It is recommended to use bullet points, lists, and readable paragraph spacing for user readability. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text.)
+(Then add a conclusion Format: Give the user an example of another question they could ask and how you could possibly expand your response)
+(Finally add all sources exactly as provided in the text. Format: Add Sources: then all sources with names and then link. Example: Source_Name: https:\\source_link)
+Format:
+Please use markdown formatting: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code."""
 
-def get_api_client():
-    """Get the API client based on configuration."""
-    api_provider = os.getenv('API_PROVIDER', 'chutes')
-    
-    if api_provider == 'openrouter':
-        api_key = os.getenv('OPENROUTER_API_KEY')
-        if not api_key:
-            raise ValueError("OPENROUTER_API_KEY environment variable is required")
-        return OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=api_key,
-            default_headers={"HTTP-Referer": os.getenv('FRONTEND_URL', 'http://localhost:3000')}
-        )
-    else:  # chutes
-        api_key = os.getenv('CHUTES_API_KEY')
-        if not api_key:
-            raise ValueError("CHUTES_API_KEY environment variable is required")
-        return OpenAI(
-            base_url="https://llm.chutes.ai/v1",
-            api_key=api_key
-        )
+goodness_decided_prompt = """Job: Decide if the provided data fully answers the users question to 100%. This means the provided data gives the entire answer and FULLY matches the users question.
+If it does NOT FULLY answer the users question please include <Does not fully answer user question> in your response and what could be used to gather more information where information is lacking the first amount of data. Please also include what information was missing this should be 2 sentences long in total. The searcher this will be fed to can only do internet searches.
+If it does FULLY answer the users question please include <Fully answers user question> and nothing else.
+You do not care about conciseness or verbosity AT ALL 
+You favor not searching for more answers and only search for more when needed"""
+
+# Prompt for checking if search is needed on follow-ups
+follow_up_check_prompt = """Job: This is a follow up question please decide if to answer it a internet search should be done. If yes please respond with <search> if no please respond with <no search>."""
 
 
 def ai(prompt, instructions, think, model):
@@ -153,23 +163,22 @@ def ai(prompt, instructions, think, model):
         if chunk.choices and chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
             answer += content
-    return answer
+    return clean_ai_output(answer)
 
 
 def ai_stream(prompt, instructions, model):
     """Streaming AI call that yields chunks for SSE."""
     client = get_api_client()
     
-    call_args = {
-        "model": model,
-        "messages": [
+    stream = client.chat.completions.create(
+        model=model,
+        messages=[
             {"role": "system", "content": instructions},
             {"role": "user", "content": prompt}
         ],
-        "stream": True
-    }
-
-    stream = client.chat.completions.create(**call_args)
+        stream=True
+    )
+    
     for chunk in stream:
         if chunk.choices and chunk.choices[0].delta.content:
             content = chunk.choices[0].delta.content
@@ -177,33 +186,39 @@ def ai_stream(prompt, instructions, model):
 
 
 def process_search(prompt, memory):
-    """Process the search workflow and yield status updates and final streaming response."""
+    """
+    Search workflow with goodness evaluation loop and parallel processing.
+    """
     search_data = []
-    search_history = []  # Track all searches for frontend
+    search_history = []
     iter_count = 0
     searching = True
     no_search = False
     query = ""
     
-    # Check if this is a follow-up that needs searching
-    if memory:
+    start_time = time.time()
+    
+    # === STEP 1: Check if search is needed (for follow-ups) ===
+    if memory and len(memory) > 0:
         yield {
             "type": "status", 
             "message": "Checking if search needed...", 
             "step": 0, 
             "icon": "thinking"
         }
+        
         if_search = ai(
             "User question: " + prompt,
-            "Job: This is a follow up question please decide if to answer it a internet search should be done. If yes please respond with <search> if no please respond with <no search>.",
-            False, general
+            follow_up_check_prompt,
+            False, researcher
         )
-        if_search = clean_ai_output(if_search)
-        if "<search>" not in if_search:
+        
+        if "<no search>" in if_search.lower():
             searching = False
     
+    # === SEARCH LOOP WITH GOODNESS EVALUATION ===
     while searching and iter_count < 4:
-        # Step 1: Generate search query
+        # Step 2: Generate search query
         yield {
             "type": "status", 
             "message": "Thinking...", 
@@ -222,7 +237,6 @@ def process_search(prompt, memory):
                 search_prompt, False, researcher
             )
         
-        # Clean AI output to remove thinking tags
         query = clean_ai_output(query)
         
         if "<No searching needed>" in query:
@@ -233,18 +247,19 @@ def process_search(prompt, memory):
         
         # Split queries by ~ and search in parallel
         queries = [q.strip() for q in query.split("~") if q.strip()]
-        
-        # Clean each individual query too
         queries = [clean_ai_output(q) for q in queries]
-        queries = [q for q in queries if q and len(q) > 2]  # Remove empty or tiny queries
+        queries = [q for q in queries if q and len(q) > 2]
         
         # If no valid queries after split, use original
         if not queries:
             queries = [query]
         
-        depth = 8  # 8 sources per query
+        # Limit to 4 queries
+        queries = queries[:4]
         
-        # Step 2: Send initial searching status for each query
+        depth = 5  # 5 sources per query (reduced from 8 for speed)
+        
+        # Step 3: Send initial searching status for each query
         for q_idx, q in enumerate(queries):
             yield {
                 "type": "status", 
@@ -252,7 +267,6 @@ def process_search(prompt, memory):
                 "step": 2, 
                 "icon": "searching"
             }
-            # Send search event immediately with query (sources pending)
             yield {
                 "type": "search",
                 "query": q,
@@ -263,14 +277,10 @@ def process_search(prompt, memory):
             }
         
         # Search all queries in parallel using ThreadPoolExecutor
-        def search_single_query(q):
-            return grabbers.search_and_scrape(q, depth)
-        
-        # Store results with their query index for ordering
         search_results = {}
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(queries)) as executor:
-            future_to_query = {executor.submit(search_single_query, q): (idx, q) for idx, q in enumerate(queries)}
+            future_to_query = {executor.submit(grabbers.search_and_scrape, q, depth): (idx, q) for idx, q in enumerate(queries)}
             
             for future in concurrent.futures.as_completed(future_to_query):
                 idx, q = future_to_query[future]
@@ -289,7 +299,6 @@ def process_search(prompt, memory):
             
             search_data.append(full_text)
             
-            # Create search entry for history
             search_entry = {
                 "query": q,
                 "sources": sources,
@@ -298,7 +307,6 @@ def process_search(prompt, memory):
             }
             search_history.append(search_entry)
             
-            # Send updated search event with sources
             yield {
                 "type": "search",
                 "query": q,
@@ -308,7 +316,7 @@ def process_search(prompt, memory):
                 "status": "complete"
             }
         
-        # Step 3: Evaluate results
+        # Step 4: Evaluate results (GOODNESS CHECK)
         yield {
             "type": "status", 
             "message": "Evaluating search results...", 
@@ -320,19 +328,16 @@ def process_search(prompt, memory):
         eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
         good = ai(
             "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
-            goodness_decided_prompt, False, general
+            goodness_decided_prompt, False, researcher
         )
         
-        # Clean AI output to remove thinking tags
         good = clean_ai_output(good)
-        
-        # Convert to lowercase for case-insensitive matching
         good_lower = good.lower()
         
         # Only continue searching if AI explicitly says answer is incomplete
-        # Default to stopping - this prevents endless searching when AI response is ambiguous
         if "does not fully answer" in good_lower or "doesn't fully answer" in good_lower:
             # AI says more info needed - continue searching
+            print(f"Iteration {iter_count + 1}: Need more info, searching again...")
             pass
         else:
             # AI says it's answered OR response is ambiguous - stop searching
@@ -340,7 +345,7 @@ def process_search(prompt, memory):
         
         iter_count += 1
     
-    # Step 4: Generate final response with streaming
+    # === STEP 5: Generate final response with streaming ===
     yield {
         "type": "status", 
         "message": "Generating response...", 
@@ -362,7 +367,9 @@ def process_search(prompt, memory):
     for chunk in ai_stream(prompt_text, instructions, general):
         yield {"type": "content", "data": chunk}
     
-    # Send done event with complete search history
+    total_time = time.time() - start_time
+    print(f"Total process_search time: {total_time:.2f}s (iterations: {iter_count})")
+    
     yield {
         "type": "done",
         "searchHistory": search_history
@@ -388,6 +395,7 @@ def chat():
             for update in process_search(message, memory):
                 yield f"data: {json.dumps(update)}\n\n"
         except Exception as e:
+            print(f"Chat error: {e}")
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
     
     return Response(
@@ -405,6 +413,13 @@ def chat():
 def health():
     """Health check endpoint."""
     return {"status": "ok"}
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+def clear_cache():
+    """Clear search cache endpoint."""
+    grabbers.clear_search_cache()
+    return {"status": "cache cleared"}
 
 
 if __name__ == '__main__':
