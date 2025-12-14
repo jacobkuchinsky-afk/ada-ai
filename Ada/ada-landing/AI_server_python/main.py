@@ -1,5 +1,6 @@
 import os
 import json
+import re
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from datetime import date
@@ -7,6 +8,34 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import grabbers
 import concurrent.futures
+
+
+def clean_ai_output(text):
+    """Remove thinking tags and other AI artifacts from output."""
+    if not text:
+        return text
+    
+    # Remove <think>...</think> tags and content (Qwen3 thinking format)
+    text = re.sub(r'<think>.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove <thinking>...</thinking> tags and content
+    text = re.sub(r'<thinking>.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove any unclosed thinking tags at the start
+    text = re.sub(r'^.*?</think>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(r'^.*?</thinking>', '', text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove the sentence marker mentioned in prompts
+    text = text.replace('<｜begin▁of▁sentence｜>', '')
+    
+    # Remove any other common AI artifacts
+    text = re.sub(r'<\|.*?\|>', '', text)  # Remove tokens like <|endoftext|>
+    
+    # Clean up extra whitespace
+    text = re.sub(r'\n\s*\n', '\n', text)
+    text = text.strip()
+    
+    return text
 
 # Load environment variables
 load_dotenv()
@@ -169,6 +198,7 @@ def process_search(prompt, memory):
             "Job: This is a follow up question please decide if to answer it a internet search should be done. If yes please respond with <search> if no please respond with <no search>.",
             False, general
         )
+        if_search = clean_ai_output(if_search)
         if "<search>" not in if_search:
             searching = False
     
@@ -192,6 +222,9 @@ def process_search(prompt, memory):
                 search_prompt, False, researcher
             )
         
+        # Clean AI output to remove thinking tags
+        query = clean_ai_output(query)
+        
         if "<No searching needed>" in query:
             no_search = True
             break
@@ -200,6 +233,10 @@ def process_search(prompt, memory):
         
         # Split queries by ~ and search in parallel
         queries = [q.strip() for q in query.split("~") if q.strip()]
+        
+        # Clean each individual query too
+        queries = [clean_ai_output(q) for q in queries]
+        queries = [q for q in queries if q and len(q) > 2]  # Remove empty or tiny queries
         
         # If no valid queries after split, use original
         if not queries:
@@ -285,6 +322,9 @@ def process_search(prompt, memory):
             "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
             goodness_decided_prompt, False, general
         )
+        
+        # Clean AI output to remove thinking tags
+        good = clean_ai_output(good)
         
         # Convert to lowercase for case-insensitive matching
         good_lower = good.lower()
