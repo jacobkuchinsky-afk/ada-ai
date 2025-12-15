@@ -76,6 +76,18 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 (Finally add all sources exactly as provided in the text. Format: Add Sources: then all sources with names and then link. Example: Source_Name: https:\\source_link)
                 Format:
                 Please use markdown formating: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code.
+                
+                TABLES: When presenting comparative data, statistics, or structured information that would benefit from tabular format, use the special table syntax:
+                [TABLE]
+                Header1 | Header2 | Header3
+                Row1Data1 | Row1Data2 | Row1Data3
+                Row2Data1 | Row2Data2 | Row2Data3
+                [/TABLE]
+                - The first row is always headers
+                - Separate columns with | (pipe character)
+                - Each row on a new line
+                - Use tables for: comparisons, specifications, pricing, statistics, feature lists, timelines
+                - Do NOT use markdown tables with dashes (---), always use [TABLE] format
                 """
 
 search_prompt = f"""You are an expert at converting questions into effective web search queries.
