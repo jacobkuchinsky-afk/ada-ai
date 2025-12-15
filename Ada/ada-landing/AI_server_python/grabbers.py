@@ -1,6 +1,17 @@
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import unquote
+from urllib.parse import unquote, urlparse
+
+def extract_domain(url):
+    """Extract domain name from URL for display."""
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc
+        if domain.startswith('www.'):
+            domain = domain[4:]
+        return domain
+    except:
+        return url
 
 def search_and_scrape(search, result_number):
     """
@@ -11,9 +22,10 @@ def search_and_scrape(search, result_number):
     result_number (int): Number of websites to scrape
     
     Returns:
-    list: List of dictionaries containing URL and text data for each website
+    dict: Contains 'sources' list with URL/title/domain and 'full_text' combined content
     """
     results = []
+    sources = []
     
     # Use DuckDuckGo HTML search (no API key needed)
     search_url = f"https://html.duckduckgo.com/html/?q={requests.utils.quote(search)}"
@@ -61,6 +73,14 @@ def search_and_scrape(search, result_number):
                 page_response.raise_for_status()
                 page_soup = BeautifulSoup(page_response.content, 'html.parser')
                 
+                # Get page title
+                title_tag = page_soup.find('title')
+                title = title_tag.get_text(strip=True) if title_tag else extract_domain(url)
+                
+                # Truncate long titles
+                if len(title) > 80:
+                    title = title[:77] + '...'
+                
                 # Remove script and style elements
                 for element in page_soup(['script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript']):
                     element.decompose()
@@ -75,23 +95,48 @@ def search_and_scrape(search, result_number):
                 # Clean up whitespace
                 text = ' '.join(text.split())
                 
+                # Add source info
+                sources.append({
+                    'url': url,
+                    'title': title,
+                    'domain': extract_domain(url)
+                })
+                
                 results.append({
                     'url': url,
+                    'title': title,
                     'text': text
                 })
             except Exception as e:
                 print(f"Error scraping {url}: {str(e)}")
+                # Still add the source even if scraping failed
+                sources.append({
+                    'url': url,
+                    'title': extract_domain(url),
+                    'domain': extract_domain(url)
+                })
                 results.append({
                     'url': url,
+                    'title': extract_domain(url),
                     'text': f'Error scraping: {str(e)}'
                 })
         
     except Exception as e:
-        return [{'error': f'Search failed: {str(e)}'}]
+        print(f"Search failed: {str(e)}")
+        return {
+            'sources': [],
+            'full_text': f'Search failed: {str(e)}',
+            'error': str(e),
+            'count': 0
+        }
+    
+    # Build full text for AI processing
     full_text = ""
     for i, result in enumerate(results, 1):
-        full_text += f"URL: {result['url']}\n" + result['text']
-    return full_text
-
-
-
+        full_text += f"\n\n--- Source {i}: {result.get('title', 'Unknown')} ---\nURL: {result['url']}\n{result['text']}"
+    
+    return {
+        'sources': sources,
+        'full_text': full_text,
+        'count': len(sources)
+    }
