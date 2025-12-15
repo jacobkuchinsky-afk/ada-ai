@@ -19,19 +19,33 @@ interface ChatMessageProps {
 
 // Parse a table from [TABLE]...[/TABLE] format
 function parseTable(tableContent: string, keyStart: number): { element: React.ReactNode; key: number } {
+  // Split by newlines and filter out empty lines
   const lines = tableContent.trim().split('\n').filter(line => line.trim());
   
   if (lines.length < 1) {
     return { element: null, key: keyStart };
   }
   
-  // First line is headers
-  const headers = lines[0].split('|').map(h => h.trim()).filter(h => h);
+  // First line is headers - split by | but keep structure
+  const headerParts = lines[0].split('|').map(h => h.trim());
+  // Remove empty strings at start/end (from leading/trailing |)
+  const headers = headerParts.filter((h, i) => 
+    !(i === 0 && h === '') && !(i === headerParts.length - 1 && h === '')
+  );
   
-  // Rest are data rows
-  const rows = lines.slice(1).map(line => 
-    line.split('|').map(cell => cell.trim()).filter(cell => cell)
-  ).filter(row => row.length > 0);
+  if (headers.length === 0) {
+    return { element: null, key: keyStart };
+  }
+  
+  // Rest are data rows - preserve empty cells!
+  const rows = lines.slice(1).map(line => {
+    const cellParts = line.split('|').map(cell => cell.trim());
+    // Remove empty strings at start/end (from leading/trailing |)
+    const cells = cellParts.filter((c, i) => 
+      !(i === 0 && c === '') && !(i === cellParts.length - 1 && c === '')
+    );
+    return cells;
+  }).filter(row => row.some(cell => cell !== '')); // Keep rows that have at least one non-empty cell
   
   const table = (
     <div key={keyStart} className={styles.tableWrapper}>
@@ -39,15 +53,17 @@ function parseTable(tableContent: string, keyStart: number): { element: React.Re
         <thead>
           <tr>
             {headers.map((header, i) => (
-              <th key={i} className={styles.tableHeader}>{parseInlineMarkdown(header)}</th>
+              <th key={i} className={styles.tableHeader}>{parseInlineMarkdown(header) || '\u00A0'}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, rowIndex) => (
             <tr key={rowIndex} className={rowIndex % 2 === 0 ? styles.tableRowEven : styles.tableRowOdd}>
-              {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className={styles.tableCell}>{parseInlineMarkdown(cell)}</td>
+              {headers.map((_, cellIndex) => (
+                <td key={cellIndex} className={styles.tableCell}>
+                  {row[cellIndex] ? parseInlineMarkdown(row[cellIndex]) : '\u00A0'}
+                </td>
               ))}
             </tr>
           ))}
