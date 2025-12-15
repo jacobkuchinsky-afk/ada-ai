@@ -18,11 +18,21 @@ interface ChatMessageProps {
 }
 
 // Parse a table from [TABLE]...[/TABLE] format
-function parseTable(tableContent: string, keyStart: number): { element: React.ReactNode; key: number } {
+function parseTable(tableContent: string, keyStart: number, isIncomplete: boolean = false): { element: React.ReactNode; key: number } {
   // Split by newlines and filter out empty lines
   const lines = tableContent.trim().split('\n').filter(line => line.trim());
   
+  // For incomplete tables during streaming, show loading state if no content yet
   if (lines.length < 1) {
+    if (isIncomplete) {
+      const loadingElement = (
+        <div key={keyStart} className={styles.tableLoading}>
+          <span className={styles.tableLoadingDot}></span>
+          <span>Building table...</span>
+        </div>
+      );
+      return { element: loadingElement, key: keyStart + 1 };
+    }
     return { element: null, key: keyStart };
   }
   
@@ -34,6 +44,15 @@ function parseTable(tableContent: string, keyStart: number): { element: React.Re
   );
   
   if (headers.length === 0) {
+    if (isIncomplete) {
+      const loadingElement = (
+        <div key={keyStart} className={styles.tableLoading}>
+          <span className={styles.tableLoadingDot}></span>
+          <span>Building table...</span>
+        </div>
+      );
+      return { element: loadingElement, key: keyStart + 1 };
+    }
     return { element: null, key: keyStart };
   }
   
@@ -48,7 +67,7 @@ function parseTable(tableContent: string, keyStart: number): { element: React.Re
   }).filter(row => row.some(cell => cell !== '')); // Keep rows that have at least one non-empty cell
   
   const table = (
-    <div key={keyStart} className={styles.tableWrapper}>
+    <div key={keyStart} className={`${styles.tableWrapper} ${isIncomplete ? styles.tableStreaming : ''}`}>
       <table className={styles.table}>
         <thead>
           <tr>
@@ -69,6 +88,11 @@ function parseTable(tableContent: string, keyStart: number): { element: React.Re
           ))}
         </tbody>
       </table>
+      {isIncomplete && (
+        <div className={styles.tableStreamingIndicator}>
+          <span className={styles.tableLoadingDot}></span>
+        </div>
+      )}
     </div>
   );
   
@@ -76,7 +100,7 @@ function parseTable(tableContent: string, keyStart: number): { element: React.Re
 }
 
 // Parse markdown and return formatted JSX
-function parseMarkdown(text: string): React.ReactNode[] {
+function parseMarkdown(text: string, isStreaming: boolean = false): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
   let key = 0;
   
@@ -84,7 +108,7 @@ function parseMarkdown(text: string): React.ReactNode[] {
   const tableRegex = /\[TABLE\]([\s\S]*?)\[\/TABLE\]/gi;
   let lastIndex = 0;
   let match;
-  const textParts: { type: 'text' | 'table'; content: string }[] = [];
+  const textParts: { type: 'text' | 'table' | 'incomplete_table'; content: string }[] = [];
   
   while ((match = tableRegex.exec(text)) !== null) {
     // Add text before the table
@@ -98,18 +122,48 @@ function parseMarkdown(text: string): React.ReactNode[] {
   
   // Add remaining text after last table
   if (lastIndex < text.length) {
-    textParts.push({ type: 'text', content: text.slice(lastIndex) });
+    const remainingText = text.slice(lastIndex);
+    
+    // Check for incomplete table (has [TABLE] but no [/TABLE])
+    const incompleteTableMatch = remainingText.match(/\[TABLE\]([\s\S]*)$/i);
+    if (incompleteTableMatch) {
+      // Add text before the incomplete table
+      const beforeTable = remainingText.slice(0, incompleteTableMatch.index);
+      if (beforeTable) {
+        textParts.push({ type: 'text', content: beforeTable });
+      }
+      // Add incomplete table marker
+      textParts.push({ type: 'incomplete_table', content: incompleteTableMatch[1] });
+    } else {
+      textParts.push({ type: 'text', content: remainingText });
+    }
   }
   
-  // If no tables found, process as regular text
+  // If no tables found, check for incomplete table at the start
   if (textParts.length === 0) {
-    textParts.push({ type: 'text', content: text });
+    const incompleteTableMatch = text.match(/\[TABLE\]([\s\S]*)$/i);
+    if (incompleteTableMatch) {
+      const beforeTable = text.slice(0, incompleteTableMatch.index);
+      if (beforeTable) {
+        textParts.push({ type: 'text', content: beforeTable });
+      }
+      textParts.push({ type: 'incomplete_table', content: incompleteTableMatch[1] });
+    } else {
+      textParts.push({ type: 'text', content: text });
+    }
   }
   
   // Process each part
   for (const part of textParts) {
     if (part.type === 'table') {
       const result = parseTable(part.content, key);
+      if (result.element) {
+        elements.push(result.element);
+        key = result.key;
+      }
+    } else if (part.type === 'incomplete_table') {
+      // Render incomplete table (streaming) - show table being built
+      const result = parseTable(part.content, key, true);
       if (result.element) {
         elements.push(result.element);
         key = result.key;
