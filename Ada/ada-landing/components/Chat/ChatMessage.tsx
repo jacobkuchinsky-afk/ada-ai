@@ -80,60 +80,68 @@ function parseMarkdown(text: string): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
   let key = 0;
   
-  // Table markers - using § which won't appear in normal text
-  const TABLE_START = '§TABLE§';
-  const TABLE_END = '§/TABLE§';
+  // Table markers - support multiple formats
+  const TABLE_STARTS = ['§TABLE§', '§table§', '[TABLE]', '[table]'];
+  const TABLE_ENDS = ['§/TABLE§', '§/table§', '[/TABLE]', '[/table]'];
   
-  // Also support the old [TABLE] format for backwards compatibility
-  const tableRegex = /(?:§TABLE§|\[TABLE\])([\s\S]*?)(?:§\/TABLE§|\[\/TABLE\])/gi;
-  const incompleteRegex = /(?:§TABLE§|\[TABLE\])([\s\S]*)$/i;
-  
-  let lastIndex = 0;
-  let match;
   const textParts: { type: 'text' | 'table' | 'incomplete_table'; content: string }[] = [];
   
-  // Find all complete tables
-  while ((match = tableRegex.exec(text)) !== null) {
-    // Add text before the table
-    if (match.index > lastIndex) {
-      textParts.push({ type: 'text', content: text.slice(lastIndex, match.index) });
-    }
-    // Add the table
-    textParts.push({ type: 'table', content: match[1] });
-    lastIndex = match.index + match[0].length;
-  }
+  let remaining = text;
   
-  // Add remaining text after last table
-  if (lastIndex < text.length) {
-    const remainingText = text.slice(lastIndex);
+  while (remaining.length > 0) {
+    // Find the earliest table start marker
+    let earliestStart = -1;
+    let startMarkerLength = 0;
     
-    // Check for incomplete table (has start marker but no end marker)
-    const incompleteMatch = remainingText.match(incompleteRegex);
-    if (incompleteMatch) {
-      // Add text before the incomplete table
-      const beforeTable = remainingText.slice(0, incompleteMatch.index);
-      if (beforeTable) {
-        textParts.push({ type: 'text', content: beforeTable });
+    for (const startMarker of TABLE_STARTS) {
+      const idx = remaining.indexOf(startMarker);
+      if (idx !== -1 && (earliestStart === -1 || idx < earliestStart)) {
+        earliestStart = idx;
+        startMarkerLength = startMarker.length;
       }
-      // Add incomplete table marker - this will show "Creating table..."
-      textParts.push({ type: 'incomplete_table', content: incompleteMatch[1] });
+    }
+    
+    // No table start found - rest is plain text
+    if (earliestStart === -1) {
+      if (remaining.length > 0) {
+        textParts.push({ type: 'text', content: remaining });
+      }
+      break;
+    }
+    
+    // Add text before the table start
+    if (earliestStart > 0) {
+      textParts.push({ type: 'text', content: remaining.slice(0, earliestStart) });
+    }
+    
+    // Look for table end marker after the start
+    const afterStart = remaining.slice(earliestStart + startMarkerLength);
+    let earliestEnd = -1;
+    let endMarkerLength = 0;
+    
+    for (const endMarker of TABLE_ENDS) {
+      const idx = afterStart.indexOf(endMarker);
+      if (idx !== -1 && (earliestEnd === -1 || idx < earliestEnd)) {
+        earliestEnd = idx;
+        endMarkerLength = endMarker.length;
+      }
+    }
+    
+    if (earliestEnd !== -1) {
+      // Complete table found
+      const tableContent = afterStart.slice(0, earliestEnd);
+      textParts.push({ type: 'table', content: tableContent });
+      remaining = afterStart.slice(earliestEnd + endMarkerLength);
     } else {
-      textParts.push({ type: 'text', content: remainingText });
+      // Incomplete table (no end marker yet - streaming)
+      textParts.push({ type: 'incomplete_table', content: afterStart });
+      break;
     }
   }
   
-  // If no complete tables found, check for incomplete table
-  if (textParts.length === 0) {
-    const incompleteMatch = text.match(incompleteRegex);
-    if (incompleteMatch) {
-      const beforeTable = text.slice(0, incompleteMatch.index);
-      if (beforeTable) {
-        textParts.push({ type: 'text', content: beforeTable });
-      }
-      textParts.push({ type: 'incomplete_table', content: incompleteMatch[1] });
-    } else {
-      textParts.push({ type: 'text', content: text });
-    }
+  // If nothing was parsed, add the original text
+  if (textParts.length === 0 && text.length > 0) {
+    textParts.push({ type: 'text', content: text });
   }
   
   // Process each part
