@@ -17,22 +17,12 @@ interface ChatMessageProps {
   message: Message;
 }
 
-// Parse a table from [TABLE]...[/TABLE] format
-function parseTable(tableContent: string, keyStart: number, isIncomplete: boolean = false): { element: React.ReactNode; key: number } {
+// Parse a table from §TABLE§...§/TABLE§ or [TABLE]...[/TABLE] format
+function parseTable(tableContent: string, keyStart: number): { element: React.ReactNode; key: number } {
   // Split by newlines and filter out empty lines
   const lines = tableContent.trim().split('\n').filter(line => line.trim());
   
-  // For incomplete tables during streaming, show loading state if no content yet
   if (lines.length < 1) {
-    if (isIncomplete) {
-      const loadingElement = (
-        <div key={keyStart} className={styles.tableLoading}>
-          <span className={styles.tableLoadingDot}></span>
-          <span>Building table...</span>
-        </div>
-      );
-      return { element: loadingElement, key: keyStart + 1 };
-    }
     return { element: null, key: keyStart };
   }
   
@@ -44,15 +34,6 @@ function parseTable(tableContent: string, keyStart: number, isIncomplete: boolea
   );
   
   if (headers.length === 0) {
-    if (isIncomplete) {
-      const loadingElement = (
-        <div key={keyStart} className={styles.tableLoading}>
-          <span className={styles.tableLoadingDot}></span>
-          <span>Building table...</span>
-        </div>
-      );
-      return { element: loadingElement, key: keyStart + 1 };
-    }
     return { element: null, key: keyStart };
   }
   
@@ -67,7 +48,7 @@ function parseTable(tableContent: string, keyStart: number, isIncomplete: boolea
   }).filter(row => row.some(cell => cell !== '')); // Keep rows that have at least one non-empty cell
   
   const table = (
-    <div key={keyStart} className={`${styles.tableWrapper} ${isIncomplete ? styles.tableStreaming : ''}`}>
+    <div key={keyStart} className={styles.tableWrapper}>
       <table className={styles.table}>
         <thead>
           <tr>
@@ -88,11 +69,6 @@ function parseTable(tableContent: string, keyStart: number, isIncomplete: boolea
           ))}
         </tbody>
       </table>
-      {isIncomplete && (
-        <div className={styles.tableStreamingIndicator}>
-          <span className={styles.tableLoadingDot}></span>
-        </div>
-      )}
     </div>
   );
   
@@ -100,16 +76,23 @@ function parseTable(tableContent: string, keyStart: number, isIncomplete: boolea
 }
 
 // Parse markdown and return formatted JSX
-function parseMarkdown(text: string, isStreaming: boolean = false): React.ReactNode[] {
+function parseMarkdown(text: string): React.ReactNode[] {
   const elements: React.ReactNode[] = [];
   let key = 0;
   
-  // First, extract and process tables
-  const tableRegex = /\[TABLE\]([\s\S]*?)\[\/TABLE\]/gi;
+  // Table markers - using § which won't appear in normal text
+  const TABLE_START = '§TABLE§';
+  const TABLE_END = '§/TABLE§';
+  
+  // Also support the old [TABLE] format for backwards compatibility
+  const tableRegex = /(?:§TABLE§|\[TABLE\])([\s\S]*?)(?:§\/TABLE§|\[\/TABLE\])/gi;
+  const incompleteRegex = /(?:§TABLE§|\[TABLE\])([\s\S]*)$/i;
+  
   let lastIndex = 0;
   let match;
   const textParts: { type: 'text' | 'table' | 'incomplete_table'; content: string }[] = [];
   
+  // Find all complete tables
   while ((match = tableRegex.exec(text)) !== null) {
     // Add text before the table
     if (match.index > lastIndex) {
@@ -124,30 +107,30 @@ function parseMarkdown(text: string, isStreaming: boolean = false): React.ReactN
   if (lastIndex < text.length) {
     const remainingText = text.slice(lastIndex);
     
-    // Check for incomplete table (has [TABLE] but no [/TABLE])
-    const incompleteTableMatch = remainingText.match(/\[TABLE\]([\s\S]*)$/i);
-    if (incompleteTableMatch) {
+    // Check for incomplete table (has start marker but no end marker)
+    const incompleteMatch = remainingText.match(incompleteRegex);
+    if (incompleteMatch) {
       // Add text before the incomplete table
-      const beforeTable = remainingText.slice(0, incompleteTableMatch.index);
+      const beforeTable = remainingText.slice(0, incompleteMatch.index);
       if (beforeTable) {
         textParts.push({ type: 'text', content: beforeTable });
       }
-      // Add incomplete table marker
-      textParts.push({ type: 'incomplete_table', content: incompleteTableMatch[1] });
+      // Add incomplete table marker - this will show "Creating table..."
+      textParts.push({ type: 'incomplete_table', content: incompleteMatch[1] });
     } else {
       textParts.push({ type: 'text', content: remainingText });
     }
   }
   
-  // If no tables found, check for incomplete table at the start
+  // If no complete tables found, check for incomplete table
   if (textParts.length === 0) {
-    const incompleteTableMatch = text.match(/\[TABLE\]([\s\S]*)$/i);
-    if (incompleteTableMatch) {
-      const beforeTable = text.slice(0, incompleteTableMatch.index);
+    const incompleteMatch = text.match(incompleteRegex);
+    if (incompleteMatch) {
+      const beforeTable = text.slice(0, incompleteMatch.index);
       if (beforeTable) {
         textParts.push({ type: 'text', content: beforeTable });
       }
-      textParts.push({ type: 'incomplete_table', content: incompleteTableMatch[1] });
+      textParts.push({ type: 'incomplete_table', content: incompleteMatch[1] });
     } else {
       textParts.push({ type: 'text', content: text });
     }
@@ -162,12 +145,17 @@ function parseMarkdown(text: string, isStreaming: boolean = false): React.ReactN
         key = result.key;
       }
     } else if (part.type === 'incomplete_table') {
-      // Render incomplete table (streaming) - show table being built
-      const result = parseTable(part.content, key, true);
-      if (result.element) {
-        elements.push(result.element);
-        key = result.key;
-      }
+      // Show "Creating table..." placeholder while streaming
+      elements.push(
+        <div key={key++} className={styles.tableCreating}>
+          <div className={styles.tableCreatingIcon}>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span>Creating table...</span>
+        </div>
+      );
     } else {
       // Process regular text content
       const lines = part.content.split('\n');
