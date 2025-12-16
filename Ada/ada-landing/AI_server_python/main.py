@@ -113,11 +113,18 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     OUTPUT: Return only the search query, nothing else.
 """
 
-goodness_decided_prompt = """Job: Decide if the provied data fully answers the users question to 100%. This means the the provied data gives the entire answer and FULLY matches the users question
-                            If it does NOT FULLY answer the users question please include <Does not fully answer user question> in your reponse and what could be used to gather more information where information is lacking the first amount of data. Please also inlude what information was missing this should be 2 sentences long in total. The searcher this will be fed to can only do internet searches.
-                             If it does FULLY answer the users question please include <Fully answers user question> and nothing else.
-                              You do not care about conciseness or verbosity AT ALL 
-                              You favor not searching for more answers and only search for more when needed"""
+goodness_decided_prompt = """Job: Decide if the provided data fully answers the user's question.
+
+Respond with EXACTLY ONE of these markers:
+- <<<SEARCH_COMPLETE>>> if the data fully answers the question
+- <<<NEEDS_MORE_SEARCH>>> if more information is needed
+
+If you choose <<<NEEDS_MORE_SEARCH>>>, briefly explain what's missing (1-2 sentences).
+
+Guidelines:
+- Favor stopping searches - only request more if critical information is clearly missing
+- Do not request more searches for minor details or additional context
+- The searcher can only do internet searches"""
 
 summarizer = """Job: Take the given chunk of data and summarize each source with all peices of data from it example: opinoins, numbers, data, quotes, ect. Please output everything important to the users question
                 Format: Please produce the name of the source, link to the source, the information from the source under the source then repeat
@@ -343,16 +350,15 @@ def process_search(prompt, memory):
         # Clean AI output to remove thinking tags
         good = clean_ai_output(good)
         
-        # Convert to lowercase for case-insensitive matching
-        good_lower = good.lower()
-        
-        # Only continue searching if AI explicitly says answer is incomplete
-        # Default to stopping - this prevents endless searching when AI response is ambiguous
-        if "does not fully answer" in good_lower or "doesn't fully answer" in good_lower:
-            # AI says more info needed - continue searching
+        # Check for exact markers
+        if "<<<NEEDS_MORE_SEARCH>>>" in good:
+            # AI explicitly says more info needed - continue searching
             pass
+        elif "<<<SEARCH_COMPLETE>>>" in good:
+            # AI says search is complete - stop
+            searching = False
         else:
-            # AI says it's answered OR response is ambiguous - stop searching
+            # Ambiguous response - default to stopping to prevent infinite loops
             searching = False
         
         iter_count += 1
