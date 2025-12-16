@@ -132,15 +132,31 @@ summarizer = """Job: Take the given chunk of data and summarize each source with
                 Summary style: Your summary should be think and verbose with large walls of text"""
 
 
+# Singleton OpenAI client - reused across all requests to prevent connection pool exhaustion
+_openai_client = None
+_openai_client_provider = None
+
+
 def get_api_client():
-    """Get the API client based on configuration."""
+    """Get the singleton API client based on configuration.
+    
+    Creates client once and reuses it for all requests.
+    Thread-safe: OpenAI SDK client is designed for concurrent use.
+    """
+    global _openai_client, _openai_client_provider
+    
     api_provider = os.getenv('API_PROVIDER', 'chutes')
     
+    # Return existing client if it matches current provider
+    if _openai_client is not None and _openai_client_provider == api_provider:
+        return _openai_client
+    
+    # Create new client for current provider
     if api_provider == 'openrouter':
         api_key = os.getenv('OPENROUTER_API_KEY')
         if not api_key:
             raise ValueError("OPENROUTER_API_KEY environment variable is required")
-        return OpenAI(
+        _openai_client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
             default_headers={"HTTP-Referer": os.getenv('FRONTEND_URL', 'http://localhost:3000')}
@@ -149,10 +165,13 @@ def get_api_client():
         api_key = os.getenv('CHUTES_API_KEY')
         if not api_key:
             raise ValueError("CHUTES_API_KEY environment variable is required")
-        return OpenAI(
+        _openai_client = OpenAI(
             base_url="https://llm.chutes.ai/v1",
             api_key=api_key
         )
+    
+    _openai_client_provider = api_provider
+    return _openai_client
 
 
 def ai(prompt, instructions, think, model):
