@@ -29,6 +29,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Track component mount state to prevent state updates after unmount
+  const mountedRef = useRef<boolean>(true);
 
   // Chat persistence state
   const [chats, setChats] = useState<ChatPreview[]>([]);
@@ -38,6 +41,18 @@ export default function DashboardPage() {
 
   // Out of credits modal state
   const [showOutOfCreditsModal, setShowOutOfCreditsModal] = useState(false);
+
+  // Cleanup on unmount - abort any pending requests
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!loading) {
@@ -111,9 +126,10 @@ export default function DashboardPage() {
   }, [messages]);
 
   const handleNewChat = useCallback(() => {
-    // Abort any ongoing request
+    // Abort any ongoing request and nullify ref
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
     setMessages([]);
     setCurrentChatId(null);
@@ -125,9 +141,10 @@ export default function DashboardPage() {
     async (chatId: string) => {
       if (!user || chatId === currentChatId) return;
 
-      // Abort any ongoing request
+      // Abort any ongoing request and nullify ref
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
 
       try {
@@ -184,13 +201,15 @@ export default function DashboardPage() {
         return;
       }
 
-      // Abort any previous request
+      // Abort any previous request and nullify ref
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
+        abortControllerRef.current = null;
       }
 
       // Create new abort controller for this request
       abortControllerRef.current = new AbortController();
+      const currentController = abortControllerRef.current;
 
       // If no current chat, create one
       let chatId = currentChatId;
@@ -245,7 +264,7 @@ export default function DashboardPage() {
             message: content,
             memory: getMemory(),
           }),
-          signal: abortControllerRef.current.signal,
+          signal: currentController.signal,
         });
 
         if (!response.ok) {
@@ -264,6 +283,9 @@ export default function DashboardPage() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
+          
+          // Check if component is still mounted before processing
+          if (!mountedRef.current) break;
 
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
@@ -272,6 +294,9 @@ export default function DashboardPage() {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
+                
+                // Skip state updates if unmounted
+                if (!mountedRef.current) continue;
 
                 if (data.type === 'status') {
                   // Update status with step and icon
@@ -376,6 +401,10 @@ export default function DashboardPage() {
         }
 
         console.error('Chat error:', error);
+        
+        // Only update state if still mounted
+        if (!mountedRef.current) return;
+        
         setStatusMessage('');
 
         // Update the assistant message with error
@@ -400,7 +429,14 @@ export default function DashboardPage() {
         );
         setPendingSave(true);
       } finally {
-        setIsLoading(false);
+        // Only update loading state if still mounted
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
+        // Clear the controller reference when done
+        if (abortControllerRef.current === currentController) {
+          abortControllerRef.current = null;
+        }
       }
     },
     [getMemory, currentChatId, user, credits, useCredits, refreshCredits]
