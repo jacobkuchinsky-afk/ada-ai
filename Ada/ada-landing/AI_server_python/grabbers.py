@@ -44,6 +44,92 @@ def extract_domain(url):
         return url
 
 
+def extract_main_content(soup):
+    """
+    Extract the main content from a page, ignoring navigation, ads, footers, etc.
+    This gives the AI cleaner, more relevant data AND reduces memory usage.
+    
+    This IMPROVES quality by removing noise - the AI gets focused content
+    instead of wading through menu items, cookie notices, and ads.
+    """
+    # Remove junk elements first
+    for element in soup(['script', 'style', 'nav', 'footer', 'header', 'iframe', 
+                         'noscript', 'aside', 'form', 'button', 'input', 'svg']):
+        element.decompose()
+    
+    # Remove common junk by class/id patterns
+    junk_patterns = ['nav', 'menu', 'sidebar', 'footer', 'header', 'cookie', 
+                     'banner', 'ad-', 'ads-', 'advert', 'popup', 'modal', 'comment', 
+                     'social', 'share', 'related', 'recommend', 'newsletter', 
+                     'subscribe', 'signup', 'promo', 'sponsor', 'widget', 'toolbar']
+    
+    for pattern in junk_patterns:
+        for element in soup.find_all(class_=lambda x: x and pattern in str(x).lower()):
+            element.decompose()
+        for element in soup.find_all(id=lambda x: x and pattern in str(x).lower()):
+            element.decompose()
+    
+    # Try to find the main content area (in order of preference)
+    content_selectors = [
+        soup.find('article'),
+        soup.find('main'),
+        soup.find(class_='article'),
+        soup.find(class_='content'),
+        soup.find(class_='post'),
+        soup.find(class_='entry'),
+        soup.find(class_='article-body'),
+        soup.find(class_='post-content'),
+        soup.find(class_='entry-content'),
+        soup.find(id='content'),
+        soup.find(id='main'),
+        soup.find(id='article'),
+        soup.find('div', class_=lambda x: x and 'article' in str(x).lower() if x else False),
+        soup.find('div', class_=lambda x: x and 'content' in str(x).lower() if x else False),
+    ]
+    
+    # Use the first valid content area found
+    main_content = None
+    for selector in content_selectors:
+        if selector:
+            main_content = selector
+            break
+    
+    # If we found a main content area, extract text from it
+    if main_content:
+        text_parts = []
+        for element in main_content.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                                               'li', 'td', 'th', 'blockquote', 'pre', 'code']):
+            text = element.get_text(strip=True)
+            # Only include substantial text (skip "Read more", "Click here", etc.)
+            if len(text) > 30:
+                text_parts.append(text)
+        
+        if text_parts:
+            return ' '.join(text_parts)
+    
+    # Fallback: Extract all paragraphs and headings from body
+    body = soup.find('body')
+    if body:
+        text_parts = []
+        for element in body.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'li', 'blockquote']):
+            text = element.get_text(strip=True)
+            if len(text) > 30:  # Skip tiny fragments like menu items
+                text_parts.append(text)
+        
+        if text_parts:
+            return ' '.join(text_parts)
+    
+    # Last resort: get all text from body
+    if body:
+        text = body.get_text(separator=' ', strip=True)
+        text = ' '.join(text.split())
+        return text
+    
+    # Absolute fallback
+    text = soup.get_text(separator=' ', strip=True)
+    return ' '.join(text.split())
+
+
 def search_and_scrape(search, result_number):
     """
     Takes a search query and number of results, returns text data from those websites.
@@ -99,6 +185,10 @@ def search_and_scrape(search, result_number):
                 if len(links) >= result_number:
                     break
             
+            # Clean up search results soup immediately to free memory
+            soup.decompose()
+            del soup
+            
             print(f"Found {len(links)} links to scrape")
             
             # Scrape each website up to result_number
@@ -117,19 +207,9 @@ def search_and_scrape(search, result_number):
                     if len(title) > 80:
                         title = title[:77] + '...'
                     
-                    # Remove script and style elements
-                    for element in page_soup(['script', 'style', 'nav', 'footer', 'header', 'iframe', 'noscript']):
-                        element.decompose()
-                    
-                    # Get text from body or main content
-                    body = page_soup.find('body')
-                    if body:
-                        text = body.get_text(separator=' ', strip=True)
-                    else:
-                        text = page_soup.get_text(separator=' ', strip=True)
-                    
-                    # Clean up whitespace
-                    text = ' '.join(text.split())
+                    # Use smart content extraction - gets clean content, removes junk
+                    # This IMPROVES quality by giving AI focused data
+                    text = extract_main_content(page_soup)
                     
                     # Add source info
                     sources.append({
@@ -143,6 +223,11 @@ def search_and_scrape(search, result_number):
                         'title': title,
                         'text': text
                     })
+                    
+                    # Free memory immediately after processing each page
+                    page_soup.decompose()
+                    del page_soup, page_response
+                    
                 except Exception as e:
                     print(f"Error scraping {url}: {str(e)}")
                     # Still add the source even if scraping failed
