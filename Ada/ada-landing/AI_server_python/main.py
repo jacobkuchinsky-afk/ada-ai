@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import gc
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from datetime import date
@@ -393,12 +394,20 @@ def process_search(prompt, memory):
     # Combine all search data into a single formatted string
     combined_search_data = "\n\n=== COMBINED SEARCH RESULTS ===\n\n".join(search_data) if search_data else ""
     
+    # Free memory from search_data list before streaming
+    search_data.clear()
+    gc.collect()
+    
     if no_search:
         prompt_text = "User question: " + prompt + "\n\nSearch data: " + combined_search_data + "\n\nNo data has been given just answer the users question truthfully"
     else:
         prompt_text = "User question: " + prompt + "\n\nSearch data:\n" + combined_search_data
     
     instructions = main_prompt + " Memory from previous conversation: " + str(memory)
+    
+    # Free combined_search_data after building prompt
+    del combined_search_data
+    gc.collect()
     
     # Stream the final response
     for chunk in ai_stream(prompt_text, instructions, general):
