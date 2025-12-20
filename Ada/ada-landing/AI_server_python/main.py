@@ -228,6 +228,7 @@ def process_search(prompt, memory):
     searching = True
     no_search = False
     query = ""
+    service_failure_detected = False  # Track if search service is down
     
     # Check if this is a follow-up that needs searching
     if memory:
@@ -255,12 +256,14 @@ def process_search(prompt, memory):
             "icon": "thinking"
         }
         
-        if iter_count > 0:
+        if iter_count > 0 and not service_failure_detected:
+            # Only regenerate query if previous search had results but they weren't good enough
+            # Don't regenerate if the search service itself is down (that won't help)
             query = ai(
                 "User question: " + prompt + " Your original query: " + query + " Failed, please make a new better suited query.",
                 search_prompt, False, researcher
             )
-        else:
+        elif iter_count == 0:
             query = ai(
                 "User question:" + prompt + " Memory: " + str(memory),
                 search_prompt, False, researcher
@@ -286,7 +289,7 @@ def process_search(prompt, memory):
         if not queries:
             queries = [query]
         
-        depth = 8  # 8 sources per query
+        depth = 5  # 5 sources per query (reduced from 8 to prevent memory issues)
         
         # Step 2: Send initial searching status for each query
         for q_idx, q in enumerate(queries):
@@ -323,7 +326,17 @@ def process_search(prompt, memory):
                     search_results[idx] = (q, scrape_result)
                 except Exception as e:
                     print(f"Error searching query '{q}': {e}")
-                    search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}'})
+                    search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}', 'service_available': False})
+        
+        # Check if search service is down (all queries failed with service_available=False)
+        service_unavailable_count = sum(
+            1 for idx in range(len(queries))
+            if not search_results.get(idx, (None, {}))[1].get('service_available', True)
+        )
+        if service_unavailable_count == len(queries):
+            # All searches failed due to service being down - don't retry
+            service_failure_detected = True
+            print("Search service appears to be down - skipping further search attempts")
         
         # Process results in order and yield events
         for idx in range(len(queries)):
@@ -351,6 +364,18 @@ def process_search(prompt, memory):
                 "queryIndex": idx + 1,
                 "status": "complete"
             }
+        
+        # If search service is down, exit the loop - don't waste time evaluating or retrying
+        if service_failure_detected:
+            searching = False
+            no_search = True  # Fall back to AI knowledge
+            yield {
+                "type": "status",
+                "message": "Search service unavailable, using AI knowledge...",
+                "step": 3,
+                "icon": "thinking"
+            }
+            break
         
         # Step 3: Evaluate results
         yield {
