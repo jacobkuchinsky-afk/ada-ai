@@ -4,13 +4,13 @@ from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, unquote
 
-# Try to use duckduckgo-search package (more reliable than HTML scraping)
+# Try to use ddgs package (more reliable than HTML scraping)
 try:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
     USE_DDGS = True
 except ImportError:
     USE_DDGS = False
-    print("Warning: duckduckgo-search not installed, falling back to HTML scraping")
+    print("Warning: ddgs not installed, falling back to HTML scraping")
 
 
 def create_session():
