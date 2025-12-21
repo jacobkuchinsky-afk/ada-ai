@@ -74,11 +74,12 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
                 (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text.)
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
-                (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. Example: Source_Name: https:\\source_link)
+                (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. ALWAYS ADD SOURCES WHEN THERE WAS TEXT PROVIDED!)
+
                 Format:
                 Please use markdown formating: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code.
                 
-                HYPERLINKS: When referencing websites, sources, or external resources, ALWAYS use markdown hyperlink format:
+                HYPERLINKS: When referencing websites, sources, or external resources, ALWAYS use markdown hyperlink format make sure to use the hyperliunks for the required sources section:
                 - Format: [Descriptive Text](https://url.com)
                 - Example: [Official Python Documentation](https://docs.python.org)
                 - Example: [Read more on Wikipedia](https://en.wikipedia.org/wiki/Topic)
@@ -134,11 +135,14 @@ Guidelines:
 - Favor stopping searches - only request more if critical information is clearly missing
 - Do not request more searches for minor details or additional context
 - The searcher can only do internet searches"""
-
+chat_summary_prompt = """Job: Take the following chat logs and summarize the users question and then the output from the AI.
+                        - The summarry should be short
+                        - The questions summary should still keep the overall idea of what the question was
+                        - The answer/output summary should keep the main points of what was said and some of the  speicifc numbers if possible"""
 summarizer = """Job: Take the given chunk of data and summarize each source with all peices of data from it example: opinoins, numbers, data, quotes, ect. Please output everything important to the users question
                 Format: Please produce the name of the source, link to the source, the information from the source under the source then repeat
                 Your summary SHOULD NOT EVER answer the users question just summarize the data and pull together all data that could MAYBE be used to answer the users question even if the connect is thin. 
-                Summary style: Your summary should be think and verbose with large walls of text"""
+                Summary style: Your summary should be about 6 paragraphs long and have a list of important facts like numbers, quotes, data, ect."""
 
 
 # Singleton OpenAI client - reused across all requests to prevent connection pool exhaustion
@@ -228,8 +232,122 @@ def ai_stream(prompt, instructions, model):
             yield content
 
 
-def process_search(prompt, memory):
-    """Process the search workflow and yield status updates and final streaming response."""
+def summarize_research(search_data: str, user_question: str) -> str:
+    """Summarize raw search data using the summarizer prompt.
+    
+    Args:
+        search_data: Raw search data from previous message
+        user_question: The user's question that the search was for
+        
+    Returns:
+        Summarized research text, or empty string if summarization fails
+    """
+    if not search_data or len(search_data) < 100:
+        return ""
+    
+    prompt = f"User question: {user_question}\n\nSearch data to summarize:\n{search_data[:40000]}"  # Cap input
+    
+    # Retry logic - try twice before giving up
+    for attempt in range(2):
+        try:
+            result = ai(prompt, summarizer, False, fast_general)
+            result = clean_ai_output(result)
+            # Truncate if too long
+            return result[:5000] if result else ""
+        except Exception as e:
+            if attempt == 0:
+                print(f"Summarization attempt 1 failed: {e}, retrying...")
+                continue  # Retry once
+            print(f"Summarization failed after retry: {e}")
+            return ""  # Skip on second failure
+    
+    return ""
+
+
+def compress_memory(memory: list) -> list:
+    """Compress oldest conversation pair if memory has 7+ exchanges.
+    
+    Args:
+        memory: List of message dicts with 'role' and 'content' keys
+        
+    Returns:
+        Memory list with oldest pair compressed if threshold met
+    """
+    if not memory or not isinstance(memory, list):
+        return memory
+    
+    # Count pairs (user + assistant = 1 pair)
+    # Filter to only count user and assistant messages
+    conversation_messages = [m for m in memory if m.get('role') in ('user', 'assistant')]
+    pairs = len(conversation_messages) // 2
+    
+    if pairs < 7:
+        return memory
+    
+    # Find the first user message and its corresponding assistant response
+    first_user_idx = None
+    first_assistant_idx = None
+    
+    for i, msg in enumerate(memory):
+        if msg.get('role') == 'user' and first_user_idx is None:
+            first_user_idx = i
+        elif msg.get('role') == 'assistant' and first_user_idx is not None and first_assistant_idx is None:
+            first_assistant_idx = i
+            break
+    
+    # If we can't find a valid pair, return original
+    if first_user_idx is None or first_assistant_idx is None:
+        return memory
+    
+    oldest_user = memory[first_user_idx]
+    oldest_assistant = memory[first_assistant_idx]
+    
+    # Summarize using chat_summary_prompt
+    chat_to_summarize = f"User: {oldest_user.get('content', '')}\n\nAssistant: {oldest_assistant.get('content', '')}"
+    
+    # Retry logic
+    summary = None
+    for attempt in range(2):
+        try:
+            summary = ai(chat_to_summarize[:20000], chat_summary_prompt, False, fast_general)  # Cap input
+            summary = clean_ai_output(summary)
+            break
+        except Exception as e:
+            if attempt == 0:
+                print(f"Compression attempt 1 failed: {e}, retrying...")
+                continue
+            print(f"Compression failed after retry: {e}")
+            # On second failure, keep original (don't lose data)
+            return memory
+    
+    # If summary is empty or too short, keep original
+    if not summary or len(summary) < 20:
+        return memory
+    
+    # Truncate summary if too long
+    summary = summary[:2000]
+    
+    # Replace oldest pair with compressed version
+    compressed_message = {
+        "role": "system",
+        "content": f"[Compressed conversation summary]: {summary}"
+    }
+    
+    # Build new memory: everything before first_user, compressed message, everything after first_assistant
+    new_memory = memory[:first_user_idx] + [compressed_message] + memory[first_assistant_idx + 1:]
+    
+    return new_memory
+
+
+def process_search(prompt, memory, previous_search_data=None, previous_user_question=None):
+    """Process the search workflow and yield status updates and final streaming response.
+    
+    Args:
+        prompt: The user's current message
+        memory: Conversation history as list of {role, content} dicts
+        previous_search_data: Raw search data from previous message (for summarization)
+        previous_user_question: The user question from previous message (for summarization context)
+    """
     search_data = []
     search_history = []  # Track all searches for frontend
     iter_count = 0
@@ -237,6 +355,11 @@ def process_search(prompt, memory):
     no_search = False
     query = ""
     service_failure_detected = False  # Track if search service is down
+    research_summary = ""  # Will hold summarized previous research
+    summary_future = None  # Future for parallel summarization
+    
+    # Compress memory if it has 7+ conversation pairs
+    memory = compress_memory(memory)
     
     # Check if this is a follow-up that needs searching
     if memory:
@@ -254,6 +377,19 @@ def process_search(prompt, memory):
         if_search = clean_ai_output(if_search)
         if "<search>" not in if_search:
             searching = False
+    
+    # Start parallel summarization of previous search data if:
+    # 1. Current message will trigger a search (searching == True)
+    # 2. We have previous search data to summarize
+    # This runs in parallel with the search to minimize latency
+    summarization_executor = None
+    if searching and previous_search_data and len(previous_search_data) > 100:
+        summarization_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        summary_future = summarization_executor.submit(
+            summarize_research, 
+            previous_search_data, 
+            previous_user_question or prompt  # Use previous question if available, else current
+        )
     
     while searching and iter_count < 4:
         # Step 1: Generate search query
@@ -416,6 +552,22 @@ def process_search(prompt, memory):
         
         iter_count += 1
     
+    # Collect summarization result if it was started
+    if summary_future is not None:
+        try:
+            research_summary = summary_future.result(timeout=30)  # 30 second timeout
+            print(f"Research summarization completed: {len(research_summary)} chars")
+        except concurrent.futures.TimeoutError:
+            print("Research summarization timed out, skipping")
+            research_summary = ""
+        except Exception as e:
+            print(f"Research summarization failed: {e}")
+            research_summary = ""
+    
+    # Clean up the summarization executor
+    if summarization_executor is not None:
+        summarization_executor.shutdown(wait=False)
+    
     # Step 4: Generate final response with streaming
     yield {
         "type": "status", 
@@ -427,6 +579,9 @@ def process_search(prompt, memory):
     # Combine all search data into a single formatted string
     combined_search_data = "\n\n=== COMBINED SEARCH RESULTS ===\n\n".join(search_data) if search_data else ""
     
+    # Store raw search data for returning to frontend (capped at 50KB)
+    raw_search_data_for_return = combined_search_data[:50000] if combined_search_data else ""
+    
     # Free memory from search_data list before streaming
     search_data.clear()
     gc.collect()
@@ -436,7 +591,12 @@ def process_search(prompt, memory):
     else:
         prompt_text = "User question: " + prompt + "\n\nSearch data:\n" + combined_search_data
     
+    # Build instructions with memory and research summary
     instructions = main_prompt + " Memory from previous conversation: " + str(memory)
+    
+    # Add research summary from previous conversation if available
+    if research_summary:
+        instructions += f"\n\nSummarized research from previous conversation:\n{research_summary}"
     
     # Free combined_search_data after building prompt
     del combined_search_data
@@ -446,10 +606,11 @@ def process_search(prompt, memory):
     for chunk in ai_stream(prompt_text, instructions, general):
         yield {"type": "content", "data": chunk}
     
-    # Send done event with complete search history
+    # Send done event with complete search history and raw search data
     yield {
         "type": "done",
-        "searchHistory": search_history
+        "searchHistory": search_history,
+        "rawSearchData": raw_search_data_for_return
     }
 
 
@@ -459,6 +620,8 @@ def chat():
     data = request.json
     message = data.get('message', '')
     memory = data.get('memory', [])
+    previous_search_data = data.get('previousSearchData', None)  # Raw search data from last message
+    previous_user_question = data.get('previousUserQuestion', None)  # User question from last message
     
     if not message:
         return Response(
@@ -469,7 +632,7 @@ def chat():
     
     def generate():
         try:
-            for update in process_search(message, memory):
+            for update in process_search(message, memory, previous_search_data, previous_user_question):
                 yield f"data: {json.dumps(update)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

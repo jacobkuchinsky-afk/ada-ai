@@ -13,7 +13,6 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   isLoadingChats: boolean;
-  generatingChats?: Set<string>;
 }
 
 // Format relative time
@@ -38,8 +37,7 @@ export default function Sidebar({
   currentChatId, 
   onSelectChat, 
   onDeleteChat,
-  isLoadingChats,
-  generatingChats = new Set()
+  isLoadingChats 
 }: SidebarProps) {
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const { credits, maxCredits, isPremium, isLoading: isLoadingCredits } = useCreditsContext();
@@ -86,53 +84,43 @@ export default function Sidebar({
             <p>No chats yet</p>
           </div>
         ) : (
-          chats.map((chat) => {
-            const isGenerating = generatingChats.has(chat.id);
-            return (
-              <div
-                key={chat.id}
-                className={`${styles.chatItem} ${currentChatId === chat.id ? styles.active : ''} ${isGenerating ? styles.generating : ''}`}
-                onClick={() => onSelectChat(chat.id)}
-                onMouseEnter={() => setHoveredChatId(chat.id)}
-                onMouseLeave={() => setHoveredChatId(null)}
-              >
-                {isGenerating && (
-                  <div className={styles.generatingIndicator} title="Generating response...">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                )}
-                <div className={styles.chatItemContent}>
-                  <span className={styles.chatTitle}>{chat.title}</span>
-                  <span className={styles.chatTime}>
-                    {isGenerating ? 'Generating...' : formatRelativeTime(new Date(chat.updatedAt))}
-                  </span>
-                </div>
-                {hoveredChatId === chat.id && (
-                  <button
-                    className={styles.deleteButton}
-                    onClick={(e) => handleDeleteClick(e, chat.id)}
-                    title="Delete chat"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </button>
-                )}
+          chats.map((chat) => (
+            <div
+              key={chat.id}
+              className={`${styles.chatItem} ${currentChatId === chat.id ? styles.active : ''}`}
+              onClick={() => onSelectChat(chat.id)}
+              onMouseEnter={() => setHoveredChatId(chat.id)}
+              onMouseLeave={() => setHoveredChatId(null)}
+            >
+              <div className={styles.chatItemContent}>
+                <span className={styles.chatTitle}>{chat.title}</span>
+                <span className={styles.chatTime}>
+                  {formatRelativeTime(new Date(chat.updatedAt))}
+                </span>
               </div>
-            );
-          })
+              {hoveredChatId === chat.id && (
+                <button
+                  className={styles.deleteButton}
+                  onClick={(e) => handleDeleteClick(e, chat.id)}
+                  title="Delete chat"
+                >
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <polyline points="3 6 5 6 21 6" />
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          ))
         )}
       </div>
 
