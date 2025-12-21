@@ -1,6 +1,8 @@
 'use client';
 
 import styles from './Chat.module.css';
+import SearchStatus, { SearchEntry, StatusInfo } from './SearchStatus';
+import ReactMarkdown from 'react-markdown';
 
 export interface Message {
   id: string;
@@ -8,8 +10,8 @@ export interface Message {
   content: string;
   isTyping?: boolean;
   isStreaming?: boolean;
-  searchHistory?: import('./SearchStatus').SearchEntry[];
-  currentStatus?: import('./SearchStatus').StatusInfo | null;
+  searchHistory?: SearchEntry[];
+  currentStatus?: StatusInfo | null;
   rawSearchData?: string;  // Raw search data for summarization on next message
 }
 
@@ -27,6 +29,29 @@ export default function ChatMessage({ message }: ChatMessageProps) {
           {isUser ? 'You' : 'Ada'}
         </span>
       </div>
+      
+      {/* Show search status for assistant messages */}
+      {!isUser && message.searchHistory && message.searchHistory.length > 0 && (
+        <SearchStatus 
+          searchHistory={message.searchHistory} 
+          status={message.currentStatus}
+          isStreaming={message.isStreaming || false}
+        />
+      )}
+      
+      {/* Show current status while processing (before content arrives) */}
+      {!isUser && message.currentStatus && !message.content && (
+        <div className={styles.statusIndicator}>
+          <span className={styles.statusIcon}>
+            {message.currentStatus.icon === 'thinking' && '🤔'}
+            {message.currentStatus.icon === 'searching' && '🔍'}
+            {message.currentStatus.icon === 'evaluating' && '📊'}
+            {message.currentStatus.icon === 'generating' && '✨'}
+          </span>
+          <span className={styles.statusText}>{message.currentStatus.message}</span>
+        </div>
+      )}
+      
       <div className={styles.messageContent}>
         {message.isTyping ? (
           <div className={styles.typingIndicator}>
@@ -34,8 +59,12 @@ export default function ChatMessage({ message }: ChatMessageProps) {
             <span></span>
             <span></span>
           </div>
-        ) : (
+        ) : isUser ? (
           message.content
+        ) : (
+          <div className={styles.markdownContent}>
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
         )}
       </div>
     </div>

@@ -327,9 +327,113 @@
    ======================================== */
 
 .markdownContent {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  display: block;
+  line-height: 1.7;
+}
+
+.markdownContent p {
+  margin: 0 0 12px 0;
+}
+
+.markdownContent p:last-child {
+  margin-bottom: 0;
+}
+
+.markdownContent h1,
+.markdownContent h2,
+.markdownContent h3,
+.markdownContent h4 {
+  font-weight: 600;
+  color: var(--foreground);
+  margin: 16px 0 8px 0;
+}
+
+.markdownContent h1 {
+  font-size: 1.4em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
+}
+
+.markdownContent h2 {
+  font-size: 1.2em;
+}
+
+.markdownContent h3 {
+  font-size: 1.1em;
+}
+
+.markdownContent h4 {
+  font-size: 1em;
+}
+
+.markdownContent ul,
+.markdownContent ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdownContent li {
+  margin: 4px 0;
+}
+
+.markdownContent strong {
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.markdownContent em {
+  font-style: italic;
+}
+
+.markdownContent code {
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.9em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: rgba(255, 200, 150, 0.95);
+}
+
+.markdownContent pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.markdownContent pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.markdownContent a {
+  color: rgba(100, 180, 255, 0.95);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(100, 180, 255, 0.3);
+  transition: all 0.15s ease;
+}
+
+.markdownContent a:hover {
+  color: rgba(130, 200, 255, 1);
+  border-bottom-color: rgba(130, 200, 255, 0.6);
+}
+
+.markdownContent blockquote {
+  border-left: 3px solid rgba(59, 130, 246, 0.5);
+  margin: 12px 0;
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.05);
+  border-radius: 0 8px 8px 0;
+}
+
+.markdownContent hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 16px 0;
 }
 
 /* Headings */
@@ -596,6 +700,51 @@
   font-size: 13px;
   color: rgba(74, 222, 128, 0.9);
   animation: fadeIn 0.3s ease-out;
+}
+
+/* Status Indicator (shown while processing before content) */
+.statusIndicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 12px;
+  font-family: var(--font-ubuntu), sans-serif;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 1;
+    border-color: rgba(59, 130, 246, 0.15);
+  }
+  50% {
+    opacity: 0.8;
+    border-color: rgba(59, 130, 246, 0.3);
+  }
+}
+
+.statusIcon {
+  font-size: 18px;
+  animation: iconBounce 1s ease-in-out infinite;
+}
+
+@keyframes iconBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+.statusText {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(59, 130, 246, 0.9);
 }
 
 @keyframes fadeIn {
