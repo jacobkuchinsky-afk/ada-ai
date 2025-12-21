@@ -358,7 +358,15 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
     research_summary = ""  # Will hold summarized previous research
     summary_future = None  # Future for parallel summarization
     
-    # Compress memory if it has 7+ conversation pairs
+    # Yield immediate status so frontend knows we're processing
+    yield {
+        "type": "status", 
+        "message": "Processing...", 
+        "step": 0, 
+        "icon": "thinking"
+    }
+    
+    # Compress memory if it has 7+ conversation pairs (this may block if compression needed)
     memory = compress_memory(memory)
     
     # Check if this is a follow-up that needs searching
