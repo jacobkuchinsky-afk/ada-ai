@@ -82,7 +82,7 @@ export default function DashboardPage() {
     }
   }, [user, loading, router]);
 
-  // Load chats on mount
+  // Load chat list on mount (but don't auto-select any chat - start on main prompt page)
   useEffect(() => {
     async function loadChats() {
       if (!user) return;
@@ -91,19 +91,7 @@ export default function DashboardPage() {
         setIsLoadingChats(true);
         const userChats = await getChats(user.uid);
         setChats(userChats);
-
-        // Load most recent chat if exists
-        if (userChats.length > 0) {
-          const mostRecent = userChats[0];
-          const fullChat = await getChat(user.uid, mostRecent.id);
-          if (fullChat) {
-            setCurrentChatId(fullChat.id);
-            setChatMessagesMap(prev => ({
-              ...prev,
-              [fullChat.id]: fullChat.messages
-            }));
-          }
-        }
+        // Don't auto-load any chat - user starts on main prompt page
       } catch (error) {
         console.error('Error loading chats:', error);
       } finally {
