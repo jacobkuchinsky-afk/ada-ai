@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useCreditsContext } from '@/context/CreditsContext';
@@ -25,10 +25,15 @@ export default function DashboardPage() {
   const { user, loading } = useAuth();
   const { credits, useCredits, refreshCredits } = useCreditsContext();
   const router = useRouter();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string>('');
-  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Messages stored per chat - allows background streaming to continue
+  const [chatMessagesMap, setChatMessagesMap] = useState<Record<string, Message[]>>({});
+  
+  // Track which chats have active streams (for visual indicator)
+  const [generatingChats, setGeneratingChats] = useState<Set<string>>(new Set());
+  
+  // Store abort controllers per chat
+  const activeStreamsRef = useRef<Map<string, AbortController>>(new Map());
   
   // Track component mount state to prevent state updates after unmount
   const mountedRef = useRef<boolean>(true);
@@ -37,20 +42,33 @@ export default function DashboardPage() {
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [currentChatId, setCurrentChatId] = useState<string | null>(null);
   const [isLoadingChats, setIsLoadingChats] = useState(true);
-  const [pendingSave, setPendingSave] = useState(false);
+  const [pendingSaveChats, setPendingSaveChats] = useState<Set<string>>(new Set());
 
   // Out of credits modal state
   const [showOutOfCreditsModal, setShowOutOfCreditsModal] = useState(false);
+  
+  // Derived state - get messages for current chat
+  const messages = useMemo(() => {
+    if (!currentChatId) return [];
+    return chatMessagesMap[currentChatId] || [];
+  }, [currentChatId, chatMessagesMap]);
+  
+  // Derived state - check if current chat is generating
+  const isLoading = useMemo(() => {
+    if (!currentChatId) return false;
+    return generatingChats.has(currentChatId);
+  }, [currentChatId, generatingChats]);
 
-  // Cleanup on unmount - abort any pending requests
+  // Cleanup on unmount - abort ALL pending requests
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
+      // Abort all active streams on unmount
+      activeStreamsRef.current.forEach((controller) => {
+        controller.abort();
+      });
+      activeStreamsRef.current.clear();
     };
   }, []);
 
@@ -80,7 +98,10 @@ export default function DashboardPage() {
           const fullChat = await getChat(user.uid, mostRecent.id);
           if (fullChat) {
             setCurrentChatId(fullChat.id);
-            setMessages(fullChat.messages);
+            setChatMessagesMap(prev => ({
+              ...prev,
+              [fullChat.id]: fullChat.messages
+            }));
           }
         }
       } catch (error) {
@@ -98,68 +119,79 @@ export default function DashboardPage() {
   // Save messages when they change and response is complete
   useEffect(() => {
     async function saveMessages() {
-      if (!user || !currentChatId || messages.length === 0) return;
+      if (!user || pendingSaveChats.size === 0) return;
 
-      // Only save when not actively streaming
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage?.isStreaming) return;
+      const chatsToSave = Array.from(pendingSaveChats);
+      
+      for (const chatId of chatsToSave) {
+        const chatMessages = chatMessagesMap[chatId];
+        if (!chatMessages || chatMessages.length === 0) continue;
+        
+        // Only save when not actively streaming
+        const lastMessage = chatMessages[chatMessages.length - 1];
+        if (lastMessage?.isStreaming) continue;
 
-      try {
-        await updateChat(user.uid, currentChatId, messages);
-        setPendingSave(false);
-      } catch (error) {
-        console.error('Error saving chat:', error);
+        try {
+          await updateChat(user.uid, chatId, chatMessages);
+          setPendingSaveChats(prev => {
+            const next = new Set(prev);
+            next.delete(chatId);
+            return next;
+          });
+        } catch (error) {
+          console.error('Error saving chat:', error);
+        }
       }
     }
 
-    if (pendingSave) {
+    if (pendingSaveChats.size > 0) {
       saveMessages();
     }
-  }, [messages, currentChatId, user, pendingSave]);
+  }, [chatMessagesMap, user, pendingSaveChats]);
 
-  // Get conversation memory for context
-  const getMemory = useCallback(() => {
-    return messages.map((m) => ({
+  // Get conversation memory for context (for a specific chat)
+  const getMemoryForChat = useCallback((chatId: string) => {
+    const chatMessages = chatMessagesMap[chatId] || [];
+    return chatMessages.map((m) => ({
       role: m.role,
       content: m.content,
     }));
-  }, [messages]);
+  }, [chatMessagesMap]);
 
   const handleNewChat = useCallback(() => {
-    // Abort any ongoing request and nullify ref
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setMessages([]);
+    // Don't abort any ongoing requests - let them continue in background
+    // Just switch to a new empty chat view
     setCurrentChatId(null);
-    setStatusMessage('');
-    setIsLoading(false);
   }, []);
 
   const handleSelectChat = useCallback(
     async (chatId: string) => {
       if (!user || chatId === currentChatId) return;
 
-      // Abort any ongoing request and nullify ref
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
+      // Don't abort the stream - just switch view
+      // The stream continues in background and updates chatMessagesMap
+
+      // If we already have this chat's messages (including in-progress ones), just switch
+      if (chatMessagesMap[chatId]) {
+        setCurrentChatId(chatId);
+        return;
       }
 
+      // Otherwise load from Firestore
       try {
         const fullChat = await getChat(user.uid, chatId);
         if (fullChat) {
           setCurrentChatId(fullChat.id);
-          setMessages(fullChat.messages);
-          setStatusMessage('');
-          setIsLoading(false);
+          setChatMessagesMap(prev => ({
+            ...prev,
+            [fullChat.id]: fullChat.messages
+          }));
         }
       } catch (error) {
         console.error('Error loading chat:', error);
       }
     },
-    [user, currentChatId]
+    [user, currentChatId, chatMessagesMap]
   );
 
   const handleDeleteChat = useCallback(
@@ -167,15 +199,33 @@ export default function DashboardPage() {
       if (!user) return;
 
       try {
+        // Abort any active stream for this chat
+        const controller = activeStreamsRef.current.get(chatId);
+        if (controller) {
+          controller.abort();
+          activeStreamsRef.current.delete(chatId);
+          setGeneratingChats(prev => {
+            const next = new Set(prev);
+            next.delete(chatId);
+            return next;
+          });
+        }
+
         await deleteChat(user.uid, chatId);
 
         // Update local state
         setChats((prev) => prev.filter((c) => c.id !== chatId));
+        
+        // Remove from messages map
+        setChatMessagesMap(prev => {
+          const next = { ...prev };
+          delete next[chatId];
+          return next;
+        });
 
         // If we deleted the current chat, reset
         if (currentChatId === chatId) {
           setCurrentChatId(null);
-          setMessages([]);
         }
       } catch (error) {
         console.error('Error deleting chat:', error);
@@ -201,16 +251,6 @@ export default function DashboardPage() {
         return;
       }
 
-      // Abort any previous request and nullify ref
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
-      }
-
-      // Create new abort controller for this request
-      abortControllerRef.current = new AbortController();
-      const currentController = abortControllerRef.current;
-
       // If no current chat, create one
       let chatId = currentChatId;
       if (!chatId) {
@@ -232,16 +272,27 @@ export default function DashboardPage() {
         }
       }
 
+      // Abort any existing stream for THIS chat only
+      const existingController = activeStreamsRef.current.get(chatId);
+      if (existingController) {
+        existingController.abort();
+        activeStreamsRef.current.delete(chatId);
+      }
+
+      // Create new abort controller for this chat's request
+      const currentController = new AbortController();
+      activeStreamsRef.current.set(chatId, currentController);
+      
+      // Mark this chat as generating
+      setGeneratingChats(prev => new Set(prev).add(chatId!));
+
       // Add user message
       const userMessage: Message = {
         id: Date.now().toString(),
         role: 'user',
         content,
       };
-      setMessages((prev) => [...prev, userMessage]);
-      setIsLoading(true);
-      setStatusMessage('Connecting...');
-
+      
       // Add placeholder for assistant message
       const assistantMessageId = (Date.now() + 1).toString();
       const assistantMessage: Message = {
@@ -250,9 +301,24 @@ export default function DashboardPage() {
         content: '',
         isStreaming: true,
         searchHistory: [],
-        currentStatus: null,
+        currentStatus: { message: 'Connecting...', step: 0, icon: 'thinking' },
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Update messages for this specific chat
+      setChatMessagesMap(prev => ({
+        ...prev,
+        [chatId!]: [...(prev[chatId!] || []), userMessage, assistantMessage]
+      }));
+
+      // Helper to update a specific message in a specific chat
+      const updateChatMessage = (targetChatId: string, messageId: string, updates: Partial<Message>) => {
+        setChatMessagesMap(prev => ({
+          ...prev,
+          [targetChatId]: (prev[targetChatId] || []).map(m =>
+            m.id === messageId ? { ...m, ...updates } : m
+          )
+        }));
+      };
 
       try {
         const response = await fetch(`${API_URL}/api/chat`, {
@@ -262,7 +328,7 @@ export default function DashboardPage() {
           },
           body: JSON.stringify({
             message: content,
-            memory: getMemory(),
+            memory: getMemoryForChat(chatId!),
           }),
           signal: currentController.signal,
         });
@@ -305,14 +371,7 @@ export default function DashboardPage() {
                     step: data.step,
                     icon: data.icon,
                   };
-                  setStatusMessage(data.message);
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, currentStatus: statusInfo }
-                        : m
-                    )
-                  );
+                  updateChatMessage(chatId!, assistantMessageId, { currentStatus: statusInfo });
                 } else if (data.type === 'search') {
                   // Handle search event
                   const searchEntry: SearchEntry = {
@@ -329,52 +388,34 @@ export default function DashboardPage() {
                   );
 
                   if (existingIndex >= 0) {
-                    // Update existing search with sources
                     currentSearchHistory[existingIndex] = searchEntry;
                   } else {
-                    // Add new search
                     currentSearchHistory = [...currentSearchHistory, searchEntry];
                   }
 
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, searchHistory: [...currentSearchHistory] }
-                        : m
-                    )
-                  );
+                  updateChatMessage(chatId!, assistantMessageId, { searchHistory: [...currentSearchHistory] });
                 } else if (data.type === 'content') {
                   // Streaming content
                   accumulatedContent += data.data;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: accumulatedContent, currentStatus: null }
-                        : m
-                    )
-                  );
+                  updateChatMessage(chatId!, assistantMessageId, { 
+                    content: accumulatedContent, 
+                    currentStatus: null 
+                  });
                 } else if (data.type === 'done') {
                   // Complete - deduct 1 credit for response
                   await useCredits(1);
                   await refreshCredits();
 
                   // Store final search history
-                  setStatusMessage('');
                   const finalSearchHistory = data.searchHistory || currentSearchHistory;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? {
-                            ...m,
-                            isStreaming: false,
-                            currentStatus: null,
-                            searchHistory: finalSearchHistory,
-                          }
-                        : m
-                    )
-                  );
-                  // Trigger save
-                  setPendingSave(true);
+                  updateChatMessage(chatId!, assistantMessageId, {
+                    isStreaming: false,
+                    currentStatus: null,
+                    searchHistory: finalSearchHistory,
+                  });
+                  
+                  // Trigger save for this chat
+                  setPendingSaveChats(prev => new Set(prev).add(chatId!));
 
                   // Update chat's updatedAt in local list
                   setChats((prev) =>
@@ -404,8 +445,6 @@ export default function DashboardPage() {
         
         // Only update state if still mounted
         if (!mountedRef.current) return;
-        
-        setStatusMessage('');
 
         // Update the assistant message with error
         const errorMessage = (error as Error).message;
@@ -415,31 +454,28 @@ export default function DashboardPage() {
           ? `**Server is waking up!** ☕\n\nOur server goes to sleep when not in use to save resources. Please wait about 30-60 seconds and try again.\n\nSorry for the inconvenience!`
           : `Sorry, I encountered an error: ${errorMessage}`;
         
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                  ...m,
-                  content: friendlyMessage,
-                  isStreaming: false,
-                  currentStatus: null,
-                }
-              : m
-          )
-        );
-        setPendingSave(true);
+        updateChatMessage(chatId!, assistantMessageId, {
+          content: friendlyMessage,
+          isStreaming: false,
+          currentStatus: null,
+        });
+        
+        setPendingSaveChats(prev => new Set(prev).add(chatId!));
       } finally {
-        // Only update loading state if still mounted
+        // Only update state if still mounted
         if (mountedRef.current) {
-          setIsLoading(false);
+          // Remove from generating set
+          setGeneratingChats(prev => {
+            const next = new Set(prev);
+            next.delete(chatId!);
+            return next;
+          });
         }
-        // Clear the controller reference when done
-        if (abortControllerRef.current === currentController) {
-          abortControllerRef.current = null;
-        }
+        // Clean up the controller reference
+        activeStreamsRef.current.delete(chatId!);
       }
     },
-    [getMemory, currentChatId, user, credits, useCredits, refreshCredits]
+    [getMemoryForChat, currentChatId, user, credits, useCredits, refreshCredits]
   );
 
   if (loading) {
@@ -456,6 +492,15 @@ export default function DashboardPage() {
     return null;
   }
 
+  // Get status message for current chat (from the streaming message's currentStatus)
+  const statusMessage = useMemo(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage?.isStreaming && lastMessage.currentStatus) {
+      return lastMessage.currentStatus.message;
+    }
+    return '';
+  }, [messages]);
+
   return (
     <main className={styles.main}>
       <Sidebar
@@ -465,6 +510,7 @@ export default function DashboardPage() {
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
         isLoadingChats={isLoadingChats}
+        generatingChats={generatingChats}
       />
       <ChatInterface
         messages={messages}
