@@ -322,6 +322,8 @@ export default function DashboardPage() {
         let accumulatedContent = '';
         let currentSearchHistory: SearchEntry[] = [];
 
+        let receivedDone = false;
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -390,13 +392,13 @@ export default function DashboardPage() {
                     )
                   );
                 } else if (data.type === 'done') {
-                  // Complete - deduct 1 credit for response
-                  await useCredits(1);
-                  await refreshCredits();
-
-                  // Store final search history and raw search data
+                  receivedDone = true;
+                  
+                  // Store final search history and raw search data - FIRST, before any async ops
                   setStatusMessage('');
-                  const finalSearchHistory = data.searchHistory || currentSearchHistory;
+                  const finalSearchHistory = (data.searchHistory || currentSearchHistory).map(
+                    (entry: SearchEntry) => ({ ...entry, status: 'complete' as const })
+                  );
                   const rawSearchData = data.rawSearchData || '';
                   setMessages((prev) =>
                     prev.map((m) =>
@@ -411,7 +413,7 @@ export default function DashboardPage() {
                         : m
                     )
                   );
-                  // Trigger save
+                  // Trigger save immediately
                   setPendingSave(true);
 
                   // Clear streaming ref - streaming is complete
@@ -423,6 +425,14 @@ export default function DashboardPage() {
                       c.id === chatId ? { ...c, updatedAt: new Date() } : c
                     )
                   );
+
+                  // Deduct credit for response (non-blocking, after save is triggered)
+                  try {
+                    await useCredits(1);
+                    await refreshCredits();
+                  } catch (creditError) {
+                    console.warn('Credit deduction failed:', creditError);
+                  }
                 } else if (data.type === 'error') {
                   throw new Error(data.message);
                 }
@@ -434,6 +444,48 @@ export default function DashboardPage() {
               }
             }
           }
+        }
+
+        // Handle stream ending without 'done' event (connection drop, server error, etc.)
+        if (!receivedDone) {
+          console.warn('Stream ended without done event - forcing finalization');
+          setStatusMessage('');
+          
+          // Normalize search history entries to have status: 'complete'
+          const finalSearchHistory = currentSearchHistory.map(
+            (entry) => ({ ...entry, status: 'complete' as const })
+          );
+          
+          // Finalize the message with whatever content we have
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? {
+                    ...m,
+                    isStreaming: false,
+                    currentStatus: null,
+                    searchHistory: finalSearchHistory,
+                    // If we have no content but have search, add a note
+                    content: accumulatedContent || (currentSearchHistory.length > 0 
+                      ? 'Response was interrupted during generation.'
+                      : m.content),
+                  }
+                : m
+            )
+          );
+          
+          // Trigger save
+          setPendingSave(true);
+          
+          // Clear streaming ref
+          streamingChatRef.current = { chatId: null, messages: [] };
+          
+          // Update chat's updatedAt
+          setChats((prev) =>
+            prev.map((c) =>
+              c.id === chatId ? { ...c, updatedAt: new Date() } : c
+            )
+          );
         }
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
@@ -491,6 +543,7 @@ export default function DashboardPage() {
         onSelectChat={handleSelectChat}
         onDeleteChat={handleDeleteChat}
         isLoadingChats={isLoadingChats}
+        streamingChatId={isLoading ? (streamingChatRef.current.chatId || currentChatId) : null}
       />
       <ChatInterface
         messages={messages}

@@ -108,6 +108,28 @@
   position: relative;
 }
 
+/* Streaming indicator - pulsing dot */
+.streamingIndicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3b82f6;
+  flex-shrink: 0;
+  margin-right: 10px;
+  animation: streamingPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes streamingPulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+}
+
 .chatItem:hover {
   background: rgba(255, 255, 255, 0.06);
 }

@@ -13,6 +13,7 @@ interface SidebarProps {
   onSelectChat: (chatId: string) => void;
   onDeleteChat: (chatId: string) => void;
   isLoadingChats: boolean;
+  streamingChatId: string | null;
 }
 
 // Format relative time
@@ -37,7 +38,8 @@ export default function Sidebar({
   currentChatId, 
   onSelectChat, 
   onDeleteChat,
-  isLoadingChats 
+  isLoadingChats,
+  streamingChatId
 }: SidebarProps) {
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
   const { credits, maxCredits, isPremium, isLoading: isLoadingCredits } = useCreditsContext();
@@ -92,6 +94,10 @@ export default function Sidebar({
               onMouseEnter={() => setHoveredChatId(chat.id)}
               onMouseLeave={() => setHoveredChatId(null)}
             >
+              {/* Streaming indicator */}
+              {streamingChatId === chat.id && (
+                <span className={styles.streamingIndicator} title="Generating..."></span>
+              )}
               <div className={styles.chatItemContent}>
                 <span className={styles.chatTitle}>{chat.title}</span>
                 <span className={styles.chatTime}>
