@@ -394,14 +394,18 @@ export default function DashboardPage() {
                 } else if (data.type === 'done') {
                   receivedDone = true;
                   
-                  // Store final search history and raw search data - FIRST, before any async ops
+                  // Store final search history and raw search data
                   setStatusMessage('');
                   const finalSearchHistory = (data.searchHistory || currentSearchHistory).map(
                     (entry: SearchEntry) => ({ ...entry, status: 'complete' as const })
                   );
                   const rawSearchData = data.rawSearchData || '';
-                  setMessages((prev) =>
-                    prev.map((m) =>
+                  
+                  // Build the final messages array with the completed assistant message
+                  // We need to capture this BEFORE any state changes so we save the correct data
+                  const finalMessages: Message[] = [];
+                  setMessages((prev) => {
+                    const updated = prev.map((m) =>
                       m.id === assistantMessageId
                         ? {
                             ...m,
@@ -411,10 +415,11 @@ export default function DashboardPage() {
                             rawSearchData,  // Store for summarization on next message
                           }
                         : m
-                    )
-                  );
-                  // Trigger save immediately
-                  setPendingSave(true);
+                    );
+                    // Capture the final messages for saving
+                    finalMessages.push(...updated);
+                    return updated;
+                  });
 
                   // Clear streaming ref - streaming is complete
                   streamingChatRef.current = { chatId: null, messages: [] };
@@ -426,7 +431,17 @@ export default function DashboardPage() {
                     )
                   );
 
-                  // Deduct credit for response (non-blocking, after save is triggered)
+                  // Save directly with captured chatId and messages to avoid race condition
+                  // Don't use pendingSave effect - it can race with chat switching
+                  if (chatId && user) {
+                    try {
+                      await updateChat(user.uid, chatId, finalMessages);
+                    } catch (saveError) {
+                      console.error('Error saving chat:', saveError);
+                    }
+                  }
+
+                  // Deduct credit for response (non-blocking)
                   try {
                     await useCredits(1);
                     await refreshCredits();
@@ -456,9 +471,10 @@ export default function DashboardPage() {
             (entry) => ({ ...entry, status: 'complete' as const })
           );
           
-          // Finalize the message with whatever content we have
-          setMessages((prev) =>
-            prev.map((m) =>
+          // Build and capture final messages for saving
+          const finalMessages: Message[] = [];
+          setMessages((prev) => {
+            const updated = prev.map((m) =>
               m.id === assistantMessageId
                 ? {
                     ...m,
@@ -471,11 +487,10 @@ export default function DashboardPage() {
                       : m.content),
                   }
                 : m
-            )
-          );
-          
-          // Trigger save
-          setPendingSave(true);
+            );
+            finalMessages.push(...updated);
+            return updated;
+          });
           
           // Clear streaming ref
           streamingChatRef.current = { chatId: null, messages: [] };
@@ -486,6 +501,15 @@ export default function DashboardPage() {
               c.id === chatId ? { ...c, updatedAt: new Date() } : c
             )
           );
+          
+          // Save directly with captured data
+          if (chatId && user) {
+            try {
+              await updateChat(user.uid, chatId, finalMessages);
+            } catch (saveError) {
+              console.error('Error saving chat:', saveError);
+            }
+          }
         }
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
@@ -499,9 +523,10 @@ export default function DashboardPage() {
         // Clear streaming ref on error
         streamingChatRef.current = { chatId: null, messages: [] };
 
-        // Update the assistant message with error
-        setMessages((prev) =>
-          prev.map((m) =>
+        // Build and capture final messages for saving
+        const finalMessages: Message[] = [];
+        setMessages((prev) => {
+          const updated = prev.map((m) =>
             m.id === assistantMessageId
               ? {
                   ...m,
@@ -510,9 +535,19 @@ export default function DashboardPage() {
                   currentStatus: null,
                 }
               : m
-          )
-        );
-        setPendingSave(true);
+          );
+          finalMessages.push(...updated);
+          return updated;
+        });
+        
+        // Save directly with captured data
+        if (chatId && user) {
+          try {
+            await updateChat(user.uid, chatId, finalMessages);
+          } catch (saveError) {
+            console.error('Error saving chat:', saveError);
+          }
+        }
       } finally {
         setIsLoading(false);
       }
