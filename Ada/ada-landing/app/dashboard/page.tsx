@@ -36,18 +36,22 @@ export default function DashboardPage() {
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [pendingSave, setPendingSave] = useState(false);
 
-  // Track streaming state for chat switching
+  // Track streaming state for chat switching - stores complete streaming data
   const streamingChatRef = useRef<{
     chatId: string | null;
+    visibleChatId: string | null;  // Which chat the user is currently viewing
     messages: Message[];
-  }>({ chatId: null, messages: [] });
-
-  // Keep streaming ref in sync when actively streaming the current chat
-  useEffect(() => {
-    if (isLoading && currentChatId && streamingChatRef.current.chatId === currentChatId) {
-      streamingChatRef.current.messages = [...messages];
-    }
-  }, [messages, isLoading, currentChatId]);
+    assistantMessageId: string | null;
+    accumulatedContent: string;
+    searchHistory: SearchEntry[];
+  }>({ 
+    chatId: null, 
+    visibleChatId: null,
+    messages: [], 
+    assistantMessageId: null,
+    accumulatedContent: '',
+    searchHistory: []
+  });
 
   // Out of credits modal state
   const [showOutOfCreditsModal, setShowOutOfCreditsModal] = useState(false);
@@ -163,19 +167,18 @@ export default function DashboardPage() {
     async (chatId: string) => {
       if (!user || chatId === currentChatId) return;
 
-      // If currently streaming, save the messages to the ref (don't abort)
-      if (isLoading && currentChatId) {
-        streamingChatRef.current = {
-          chatId: currentChatId,
-          messages: [...messages],
-        };
+      // If currently streaming this chat, update the ref to track we're switching away
+      if (isLoading && streamingChatRef.current.chatId === currentChatId) {
+        // Save current messages to ref before switching
+        streamingChatRef.current.messages = [...messages];
+        streamingChatRef.current.visibleChatId = chatId;  // Track that we're now viewing a different chat
       }
 
-      // Check if switching to the streaming chat - restore from ref
-      if (streamingChatRef.current.chatId === chatId) {
+      // Check if switching back to the streaming chat - restore from ref
+      if (streamingChatRef.current.chatId === chatId && isLoading) {
         setCurrentChatId(chatId);
         setMessages(streamingChatRef.current.messages);
-        // Keep loading state if it's the streaming chat
+        streamingChatRef.current.visibleChatId = chatId;  // Back to viewing the streaming chat
         return;
       }
 
@@ -186,7 +189,7 @@ export default function DashboardPage() {
           setCurrentChatId(fullChat.id);
           setMessages(fullChat.messages);
           setStatusMessage('');
-          // Only set isLoading false if not the streaming chat
+          // Only set isLoading false if not viewing the streaming chat
           if (streamingChatRef.current.chatId !== chatId) {
             setIsLoading(false);
           }
@@ -272,13 +275,7 @@ export default function DashboardPage() {
         role: 'user',
         content,
       };
-      setMessages((prev) => [...prev, userMessage]);
-      setIsLoading(true);
-      setStatusMessage('Connecting...');
-
-      // Track this chat as the streaming chat
-      streamingChatRef.current = { chatId: chatId, messages: [] };
-
+      
       // Add placeholder for assistant message
       const assistantMessageId = (Date.now() + 1).toString();
       const assistantMessage: Message = {
@@ -289,7 +286,21 @@ export default function DashboardPage() {
         searchHistory: [],
         currentStatus: null,
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      
+      // Initialize streaming ref with all data needed for saving
+      const initialMessages = [...messages, userMessage, assistantMessage];
+      streamingChatRef.current = { 
+        chatId: chatId, 
+        visibleChatId: chatId,  // Start viewing this chat
+        messages: initialMessages,
+        assistantMessageId: assistantMessageId,
+        accumulatedContent: '',
+        searchHistory: []
+      };
+      
+      setMessages(initialMessages);
+      setIsLoading(true);
+      setStatusMessage('Connecting...');
 
       try {
         // Get previous search context for summarization
@@ -344,13 +355,18 @@ export default function DashboardPage() {
                     icon: data.icon,
                   };
                   setStatusMessage(data.message);
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, currentStatus: statusInfo }
-                        : m
-                    )
+                  
+                  // Update ref messages
+                  streamingChatRef.current.messages = streamingChatRef.current.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, currentStatus: statusInfo }
+                      : m
                   );
+                  
+                  // Only update React state if still viewing this chat
+                  if (streamingChatRef.current.visibleChatId === chatId) {
+                    setMessages(streamingChatRef.current.messages);
+                  }
                 } else if (data.type === 'search') {
                   // Handle search event
                   const searchEntry: SearchEntry = {
@@ -373,56 +389,62 @@ export default function DashboardPage() {
                     // Add new search
                     currentSearchHistory = [...currentSearchHistory, searchEntry];
                   }
-
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, searchHistory: [...currentSearchHistory] }
-                        : m
-                    )
+                  
+                  // Update ref
+                  streamingChatRef.current.searchHistory = [...currentSearchHistory];
+                  streamingChatRef.current.messages = streamingChatRef.current.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, searchHistory: [...currentSearchHistory] }
+                      : m
                   );
+
+                  // Only update React state if still viewing this chat
+                  if (streamingChatRef.current.visibleChatId === chatId) {
+                    setMessages(streamingChatRef.current.messages);
+                  }
                 } else if (data.type === 'content') {
                   // Streaming content
                   accumulatedContent += data.data;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? { ...m, content: accumulatedContent, currentStatus: null }
-                        : m
-                    )
+                  
+                  // Update ref
+                  streamingChatRef.current.accumulatedContent = accumulatedContent;
+                  streamingChatRef.current.messages = streamingChatRef.current.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, content: accumulatedContent, currentStatus: null }
+                      : m
                   );
+                  
+                  // Only update React state if still viewing this chat
+                  if (streamingChatRef.current.visibleChatId === chatId) {
+                    setMessages(streamingChatRef.current.messages);
+                  }
                 } else if (data.type === 'done') {
                   receivedDone = true;
-                  
-                  // Store final search history and raw search data
                   setStatusMessage('');
+                  
+                  // Build final search history
                   const finalSearchHistory = (data.searchHistory || currentSearchHistory).map(
                     (entry: SearchEntry) => ({ ...entry, status: 'complete' as const })
                   );
                   const rawSearchData = data.rawSearchData || '';
                   
-                  // Build the final messages array with the completed assistant message
-                  // We need to capture this BEFORE any state changes so we save the correct data
-                  const finalMessages: Message[] = [];
-                  setMessages((prev) => {
-                    const updated = prev.map((m) =>
-                      m.id === assistantMessageId
-                        ? {
-                            ...m,
-                            isStreaming: false,
-                            currentStatus: null,
-                            searchHistory: finalSearchHistory,
-                            rawSearchData,  // Store for summarization on next message
-                          }
-                        : m
-                    );
-                    // Capture the final messages for saving
-                    finalMessages.push(...updated);
-                    return updated;
-                  });
-
-                  // Clear streaming ref - streaming is complete
-                  streamingChatRef.current = { chatId: null, messages: [] };
+                  // Build final messages from the REF (not state!) to ensure correct data
+                  const finalMessages = streamingChatRef.current.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? {
+                          ...m,
+                          isStreaming: false,
+                          currentStatus: null,
+                          searchHistory: finalSearchHistory,
+                          rawSearchData,  // Store for summarization on next message
+                        }
+                      : m
+                  );
+                  
+                  // Update React state if still viewing this chat
+                  if (streamingChatRef.current.visibleChatId === chatId) {
+                    setMessages(finalMessages);
+                  }
 
                   // Update chat's updatedAt in local list
                   setChats((prev) =>
@@ -431,8 +453,7 @@ export default function DashboardPage() {
                     )
                   );
 
-                  // Save directly with captured chatId and messages to avoid race condition
-                  // Don't use pendingSave effect - it can race with chat switching
+                  // Save directly with correct chatId and messages from ref
                   if (chatId && user) {
                     try {
                       await updateChat(user.uid, chatId, finalMessages);
@@ -440,6 +461,16 @@ export default function DashboardPage() {
                       console.error('Error saving chat:', saveError);
                     }
                   }
+                  
+                  // Clear streaming ref - streaming is complete
+                  streamingChatRef.current = { 
+                    chatId: null, 
+                    visibleChatId: null,
+                    messages: [], 
+                    assistantMessageId: null,
+                    accumulatedContent: '',
+                    searchHistory: []
+                  };
 
                   // Deduct credit for response (non-blocking)
                   try {
@@ -471,29 +502,26 @@ export default function DashboardPage() {
             (entry) => ({ ...entry, status: 'complete' as const })
           );
           
-          // Build and capture final messages for saving
-          const finalMessages: Message[] = [];
-          setMessages((prev) => {
-            const updated = prev.map((m) =>
-              m.id === assistantMessageId
-                ? {
-                    ...m,
-                    isStreaming: false,
-                    currentStatus: null,
-                    searchHistory: finalSearchHistory,
-                    // If we have no content but have search, add a note
-                    content: accumulatedContent || (currentSearchHistory.length > 0 
-                      ? 'Response was interrupted during generation.'
-                      : m.content),
-                  }
-                : m
-            );
-            finalMessages.push(...updated);
-            return updated;
-          });
+          // Build final messages from the REF (not state!)
+          const finalMessages = streamingChatRef.current.messages.map((m) =>
+            m.id === assistantMessageId
+              ? {
+                  ...m,
+                  isStreaming: false,
+                  currentStatus: null,
+                  searchHistory: finalSearchHistory,
+                  // If we have no content but have search, add a note
+                  content: accumulatedContent || (currentSearchHistory.length > 0 
+                    ? 'Response was interrupted during generation.'
+                    : m.content),
+                }
+              : m
+          );
           
-          // Clear streaming ref
-          streamingChatRef.current = { chatId: null, messages: [] };
+          // Update React state if still viewing this chat
+          if (streamingChatRef.current.visibleChatId === chatId) {
+            setMessages(finalMessages);
+          }
           
           // Update chat's updatedAt
           setChats((prev) =>
@@ -502,7 +530,7 @@ export default function DashboardPage() {
             )
           );
           
-          // Save directly with captured data
+          // Save directly with correct data from ref
           if (chatId && user) {
             try {
               await updateChat(user.uid, chatId, finalMessages);
@@ -510,6 +538,16 @@ export default function DashboardPage() {
               console.error('Error saving chat:', saveError);
             }
           }
+          
+          // Clear streaming ref
+          streamingChatRef.current = { 
+            chatId: null, 
+            visibleChatId: null,
+            messages: [], 
+            assistantMessageId: null,
+            accumulatedContent: '',
+            searchHistory: []
+          };
         }
       } catch (error) {
         if ((error as Error).name === 'AbortError') {
@@ -520,27 +558,24 @@ export default function DashboardPage() {
         console.error('Chat error:', error);
         setStatusMessage('');
 
-        // Clear streaming ref on error
-        streamingChatRef.current = { chatId: null, messages: [] };
-
-        // Build and capture final messages for saving
-        const finalMessages: Message[] = [];
-        setMessages((prev) => {
-          const updated = prev.map((m) =>
-            m.id === assistantMessageId
-              ? {
-                  ...m,
-                  content: `Sorry, I encountered an error: ${(error as Error).message}. Please make sure the AI server is running on port 5000.`,
-                  isStreaming: false,
-                  currentStatus: null,
-                }
-              : m
-          );
-          finalMessages.push(...updated);
-          return updated;
-        });
+        // Build final messages from the REF (not state!)
+        const finalMessages = streamingChatRef.current.messages.map((m) =>
+          m.id === assistantMessageId
+            ? {
+                ...m,
+                content: `Sorry, I encountered an error: ${(error as Error).message}. Please make sure the AI server is running on port 5000.`,
+                isStreaming: false,
+                currentStatus: null,
+              }
+            : m
+        );
         
-        // Save directly with captured data
+        // Update React state if still viewing this chat
+        if (streamingChatRef.current.visibleChatId === chatId) {
+          setMessages(finalMessages);
+        }
+        
+        // Save directly with correct data from ref
         if (chatId && user) {
           try {
             await updateChat(user.uid, chatId, finalMessages);
@@ -548,6 +583,16 @@ export default function DashboardPage() {
             console.error('Error saving chat:', saveError);
           }
         }
+        
+        // Clear streaming ref on error
+        streamingChatRef.current = { 
+          chatId: null, 
+          visibleChatId: null,
+          messages: [], 
+          assistantMessageId: null,
+          accumulatedContent: '',
+          searchHistory: []
+        };
       } finally {
         setIsLoading(false);
       }
