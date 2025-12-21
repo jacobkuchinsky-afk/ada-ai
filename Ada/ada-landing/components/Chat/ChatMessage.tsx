@@ -47,21 +47,32 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         </div>
       )}
       
-      <div className={styles.messageContent}>
-        {message.isTyping ? (
-          <div className={styles.typingIndicator}>
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-        ) : isUser ? (
-          message.content
-        ) : (
-          <div className={styles.markdownContent}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
-          </div>
-        )}
-      </div>
+      {/* Show generating indicator if streaming but no content yet and no search history */}
+      {!isUser && message.isStreaming && !message.content && !message.searchHistory?.length && !message.currentStatus && (
+        <div className={styles.statusIndicator}>
+          <span className={styles.statusDot}></span>
+          <span className={styles.statusText}>Generating response...</span>
+        </div>
+      )}
+      
+      {/* Only show message content if there is content, or for user messages */}
+      {(isUser || message.content) && (
+        <div className={styles.messageContent}>
+          {message.isTyping ? (
+            <div className={styles.typingIndicator}>
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          ) : isUser ? (
+            message.content
+          ) : (
+            <div className={styles.markdownContent}>
+              <ReactMarkdown>{message.content}</ReactMarkdown>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

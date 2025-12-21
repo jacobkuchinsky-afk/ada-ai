@@ -36,6 +36,19 @@ export default function DashboardPage() {
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [pendingSave, setPendingSave] = useState(false);
 
+  // Track streaming state for chat switching
+  const streamingChatRef = useRef<{
+    chatId: string | null;
+    messages: Message[];
+  }>({ chatId: null, messages: [] });
+
+  // Keep streaming ref in sync when actively streaming the current chat
+  useEffect(() => {
+    if (isLoading && currentChatId && streamingChatRef.current.chatId === currentChatId) {
+      streamingChatRef.current.messages = [...messages];
+    }
+  }, [messages, isLoading, currentChatId]);
+
   // Out of credits modal state
   const [showOutOfCreditsModal, setShowOutOfCreditsModal] = useState(false);
 
@@ -150,24 +163,39 @@ export default function DashboardPage() {
     async (chatId: string) => {
       if (!user || chatId === currentChatId) return;
 
-      // Abort any ongoing request
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
+      // If currently streaming, save the messages to the ref (don't abort)
+      if (isLoading && currentChatId) {
+        streamingChatRef.current = {
+          chatId: currentChatId,
+          messages: [...messages],
+        };
       }
 
+      // Check if switching to the streaming chat - restore from ref
+      if (streamingChatRef.current.chatId === chatId) {
+        setCurrentChatId(chatId);
+        setMessages(streamingChatRef.current.messages);
+        // Keep loading state if it's the streaming chat
+        return;
+      }
+
+      // Otherwise load from Firebase
       try {
         const fullChat = await getChat(user.uid, chatId);
         if (fullChat) {
           setCurrentChatId(fullChat.id);
           setMessages(fullChat.messages);
           setStatusMessage('');
-          setIsLoading(false);
+          // Only set isLoading false if not the streaming chat
+          if (streamingChatRef.current.chatId !== chatId) {
+            setIsLoading(false);
+          }
         }
       } catch (error) {
         console.error('Error loading chat:', error);
       }
     },
-    [user, currentChatId]
+    [user, currentChatId, isLoading, messages]
   );
 
   const handleDeleteChat = useCallback(
@@ -247,6 +275,9 @@ export default function DashboardPage() {
       setMessages((prev) => [...prev, userMessage]);
       setIsLoading(true);
       setStatusMessage('Connecting...');
+
+      // Track this chat as the streaming chat
+      streamingChatRef.current = { chatId: chatId, messages: [] };
 
       // Add placeholder for assistant message
       const assistantMessageId = (Date.now() + 1).toString();
@@ -383,6 +414,9 @@ export default function DashboardPage() {
                   // Trigger save
                   setPendingSave(true);
 
+                  // Clear streaming ref - streaming is complete
+                  streamingChatRef.current = { chatId: null, messages: [] };
+
                   // Update chat's updatedAt in local list
                   setChats((prev) =>
                     prev.map((c) =>
@@ -409,6 +443,9 @@ export default function DashboardPage() {
 
         console.error('Chat error:', error);
         setStatusMessage('');
+
+        // Clear streaming ref on error
+        streamingChatRef.current = { chatId: null, messages: [] };
 
         // Update the assistant message with error
         setMessages((prev) =>
