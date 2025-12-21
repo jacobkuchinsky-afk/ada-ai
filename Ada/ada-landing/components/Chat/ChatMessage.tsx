@@ -55,6 +55,13 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         </div>
       )}
       
+      {/* Show fallback for loaded messages with search history but no content (interrupted response) */}
+      {!isUser && !message.isStreaming && !message.content && message.searchHistory && message.searchHistory.length > 0 && (
+        <div className={styles.incompleteMessage}>
+          Response was interrupted. Please try again.
+        </div>
+      )}
+      
       {/* Only show message content if there is content, or for user messages */}
       {(isUser || message.content) && (
         <div className={styles.messageContent}>
