@@ -76,11 +76,14 @@ export async function updateChat(
   const chatRef = doc(db, "users", userId, "chats", chatId);
 
   // Serialize messages - remove non-serializable fields
+  // Note: rawSearchData is stored for summarization on next message
+  // We cap it at 50KB per message to avoid Firebase document size limits
   const serializedMessages = messages.map((msg) => ({
     id: msg.id,
     role: msg.role,
     content: msg.content,
     searchHistory: msg.searchHistory || [],
+    rawSearchData: msg.rawSearchData ? msg.rawSearchData.substring(0, 50000) : undefined,
     // Don't store streaming state
   }));
 
