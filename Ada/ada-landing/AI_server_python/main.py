@@ -78,6 +78,14 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 Format:
                 Please use markdown formating: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code.
                 
+                HYPERLINKS: When referencing websites, sources, or external resources, ALWAYS use markdown hyperlink format:
+                - Format: [Descriptive Text](https://url.com)
+                - Example: [Official Python Documentation](https://docs.python.org)
+                - Example: [Read more on Wikipedia](https://en.wikipedia.org/wiki/Topic)
+                - For sources section, use: [Source Name](https://source-url.com)
+                - NEVER just paste raw URLs - always wrap them in markdown link format with descriptive text
+                - The descriptive text should tell the user what they'll find when clicking
+                
                 TABLES: When presenting comparative data, statistics, or structured information that would benefit from tabular format, use the special table syntax:
                 §TABLE§
                 Header1 | Header2 | Header3

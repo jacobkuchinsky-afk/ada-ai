@@ -308,20 +308,29 @@ function parseInlineMarkdown(text: string): React.ReactNode {
       continue;
     }
     
-    // Plain URL detection
-    const urlMatch = remaining.match(/^(https?:\/\/[^\s]+)/);
+    // Plain URL detection - clean up trailing punctuation that's not part of URL
+    const urlMatch = remaining.match(/^(https?:\/\/[^\s<>"\]]+)/);
     if (urlMatch) {
+      let url = urlMatch[1];
+      // Remove trailing punctuation that's likely not part of the URL
+      const trailingPunctuation = url.match(/[.,;:!?)]+$/);
+      if (trailingPunctuation) {
+        url = url.slice(0, -trailingPunctuation[0].length);
+      }
       elements.push(
-        <a key={key++} href={urlMatch[1]} target="_blank" rel="noopener noreferrer" className={styles.link}>
-          {urlMatch[1]}
+        <a key={key++} href={url} target="_blank" rel="noopener noreferrer" className={styles.link}>
+          {url}
         </a>
       );
-      remaining = remaining.substring(urlMatch[0].length);
+      remaining = remaining.substring(url.length);
       continue;
     }
     
-    // Regular text - find next special character
-    const nextSpecial = remaining.search(/[\*_`\[]/);
+    // Regular text - find next special character or URL start
+    // Look for markdown special chars OR the start of a URL (http)
+    const nextSpecialMatch = remaining.match(/[\*_`\[]|https?:\/\//);
+    const nextSpecial = nextSpecialMatch ? remaining.indexOf(nextSpecialMatch[0]) : -1;
+    
     if (nextSpecial === -1) {
       elements.push(remaining);
       break;
