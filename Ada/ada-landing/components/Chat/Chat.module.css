@@ -727,17 +727,22 @@
   }
 }
 
-.statusIcon {
-  font-size: 18px;
-  animation: iconBounce 1s ease-in-out infinite;
+.statusDot {
+  width: 8px;
+  height: 8px;
+  background: rgba(59, 130, 246, 0.9);
+  border-radius: 50%;
+  animation: statusDotPulse 1.5s ease-in-out infinite;
 }
 
-@keyframes iconBounce {
+@keyframes statusDotPulse {
   0%, 100% {
-    transform: translateY(0);
+    opacity: 1;
+    transform: scale(1);
   }
   50% {
-    transform: translateY(-2px);
+    opacity: 0.5;
+    transform: scale(0.8);
   }
 }
 
