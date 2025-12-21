@@ -42,12 +42,7 @@ export default function ChatMessage({ message }: ChatMessageProps) {
       {/* Show current status while processing (before content arrives) */}
       {!isUser && message.currentStatus && !message.content && (
         <div className={styles.statusIndicator}>
-          <span className={styles.statusIcon}>
-            {message.currentStatus.icon === 'thinking' && '🤔'}
-            {message.currentStatus.icon === 'searching' && '🔍'}
-            {message.currentStatus.icon === 'evaluating' && '📊'}
-            {message.currentStatus.icon === 'generating' && '✨'}
-          </span>
+          <span className={styles.statusDot}></span>
           <span className={styles.statusText}>{message.currentStatus.message}</span>
         </div>
       )}

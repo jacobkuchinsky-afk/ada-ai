@@ -32,15 +32,18 @@ interface SearchStatusProps {
 }
 
 export default function SearchStatus({ searchHistory }: SearchStatusProps) {
-  const [expandedSearches, setExpandedSearches] = useState<Set<number>>(new Set());
+  const [expandedSearches, setExpandedSearches] = useState<Set<string>>(new Set());
 
-  const toggleSearch = (iteration: number) => {
+  // Create unique key for each search using iteration and queryIndex
+  const getSearchKey = (search: SearchEntry) => `${search.iteration}-${search.queryIndex || 0}`;
+
+  const toggleSearch = (searchKey: string) => {
     setExpandedSearches(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(iteration)) {
-        newSet.delete(iteration);
+      if (newSet.has(searchKey)) {
+        newSet.delete(searchKey);
       } else {
-        newSet.add(iteration);
+        newSet.add(searchKey);
       }
       return newSet;
     });
@@ -55,15 +58,16 @@ export default function SearchStatus({ searchHistory }: SearchStatusProps) {
     <div className={styles.searchStatusContainer}>
       {/* Search History Pills */}
       <div className={styles.searchHistoryList}>
-        {searchHistory.map((search, index) => {
-          const isExpanded = expandedSearches.has(search.iteration);
+        {searchHistory.map((search) => {
+          const searchKey = getSearchKey(search);
+          const isExpanded = expandedSearches.has(searchKey);
           const isSearching = search.status === 'searching';
           
           return (
-            <div key={`search-${search.iteration}-${index}`} className={styles.searchEntry}>
+            <div key={searchKey} className={styles.searchEntry}>
               <button
                 className={`${styles.searchPill} ${isExpanded ? styles.searchPillExpanded : ''} ${isSearching ? styles.searchPillSearching : ''}`}
-                onClick={() => !isSearching && toggleSearch(search.iteration)}
+                onClick={() => !isSearching && toggleSearch(searchKey)}
                 disabled={isSearching}
               >
                 <span className={styles.searchIconText}>

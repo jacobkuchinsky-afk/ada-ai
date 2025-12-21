@@ -324,12 +324,13 @@ export default function DashboardPage() {
                     query: data.query,
                     sources: data.sources || [],
                     iteration: data.iteration,
+                    queryIndex: data.queryIndex,  // Include queryIndex for parallel queries
                     status: data.status,
                   };
 
-                  // Update or add search entry
+                  // Update or add search entry - use both iteration AND queryIndex for uniqueness
                   const existingIndex = currentSearchHistory.findIndex(
-                    (s) => s.iteration === data.iteration
+                    (s) => s.iteration === data.iteration && s.queryIndex === data.queryIndex
                   );
 
                   if (existingIndex >= 0) {
