@@ -74,7 +74,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
                 (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text.)
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
-                (Finally add all sources exactly as provided in the text. Format: Add Sources: then all sources with names and then link. Example: Source_Name: https:\\source_link)
+                (Finally add all sources exactly as provided in the text. Format: Add Sources: then all sources with names and then hyperlinks. Example: Source_Name: https:\\source_link)
                 Format:
                 Please use markdown formating: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code.
                 
