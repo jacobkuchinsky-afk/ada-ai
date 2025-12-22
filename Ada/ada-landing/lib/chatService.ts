@@ -106,14 +106,22 @@ export async function updateChat(
   // We cap it at 50KB per message to avoid Firebase document size limits
   let serializedMessages;
   try {
-    serializedMessages = messages.map((msg) => ({
-      id: msg.id,
-      role: msg.role,
-      content: msg.content,
-      searchHistory: msg.searchHistory || [],
-      rawSearchData: msg.rawSearchData ? msg.rawSearchData.substring(0, 50000) : undefined,
-      // Don't store streaming state
-    }));
+    serializedMessages = messages.map((msg) => {
+      // Build base message object - Firestore doesn't accept undefined values
+      const serialized: Record<string, unknown> = {
+        id: msg.id,
+        role: msg.role,
+        content: msg.content || '',  // Ensure content is never undefined
+        searchHistory: msg.searchHistory || [],
+      };
+      
+      // Only include rawSearchData if it has a value (Firestore rejects undefined)
+      if (msg.rawSearchData) {
+        serialized.rawSearchData = msg.rawSearchData.substring(0, 50000);
+      }
+      
+      return serialized;
+    });
   } catch (serializeError) {
     throw new Error(`SAVE_ERROR: Failed to serialize messages - ${(serializeError as Error).message}`);
   }
