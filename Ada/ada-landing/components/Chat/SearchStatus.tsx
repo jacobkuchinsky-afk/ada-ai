@@ -66,13 +66,13 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
   // Show skip button when: streaming, canSkip is true, and callback exists
   const showSkipButton = isStreaming && canSkip && onSkipSearch;
 
-  // Get text preview from the most recent search entry that has one
-  const activeTextPreview = textPreview || searchHistory.find(s => s.textPreview)?.textPreview;
+  // Use the direct textPreview prop (from text_preview event)
+  const activeTextPreview = textPreview;
   
-  // Show ticker: when streaming, have text preview, and NOT in generating phase (step 4)
-  // Steps: 0=processing, 1=thinking, 2=searching, 3=evaluating, 4=generating
+  // Show ticker: when streaming AND have text preview AND not generating content yet
+  // The ticker should show during search phase (steps 1-3), hide once content generation starts (step 4 or null status)
   const statusStep = status?.step;
-  const isGeneratingPhase = statusStep === 4 || status === null; // null means content is streaming
+  const isGeneratingPhase = statusStep === 4 || (status === null && !hasActiveSearch);
   const showTicker = isStreaming && !!activeTextPreview && !isGeneratingPhase;
   
   // Debug logging
@@ -82,7 +82,6 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
     statusIcon: status?.icon,
     isGeneratingPhase,
     hasTextPreviewProp: !!textPreview,
-    foundTextPreview: !!searchHistory.find(s => s.textPreview),
     activeTextPreview: activeTextPreview?.substring(0, 50),
     showTicker,
     searchHistoryLength: searchHistory.length,
