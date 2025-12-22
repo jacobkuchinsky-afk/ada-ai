@@ -1094,6 +1094,90 @@
 }
 
 /* ========================================
+   GRAPH STYLES
+   ======================================== */
+
+/* Graph Loading Animation */
+.graphLoading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 20px;
+  margin: 12px 0;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 12px;
+  font-family: var(--font-ubuntu), sans-serif;
+}
+
+.graphLoadingIcon {
+  color: rgba(139, 92, 246, 0.8);
+  display: flex;
+  align-items: center;
+  animation: graphIconPulse 2s ease-in-out infinite;
+}
+
+@keyframes graphIconPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+.graphLoadingText {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(139, 92, 246, 0.9);
+}
+
+.graphLoadingDots {
+  display: flex;
+  gap: 2px;
+}
+
+.graphLoadingDots span {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(139, 92, 246, 0.9);
+  animation: graphDotBounce 1.4s ease-in-out infinite;
+}
+
+.graphLoadingDots span:nth-child(2) { animation-delay: 0.2s; }
+.graphLoadingDots span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes graphDotBounce {
+  0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* Graph Container */
+.graphContainer {
+  margin: 16px 0;
+  padding: 20px;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.graphTitle {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.graphError {
+  padding: 16px 20px;
+  margin: 12px 0;
+  background: rgba(255, 100, 100, 0.08);
+  border: 1px solid rgba(255, 100, 100, 0.2);
+  border-radius: 12px;
+  color: rgba(255, 100, 100, 0.9);
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+}
+
+/* ========================================
    RESPONSIVE STYLES
    ======================================== */
 
@@ -1173,5 +1257,20 @@
   
   .tableLoading {
     padding: 12px 16px;
+  }
+  
+  /* Graph Responsive */
+  .graphContainer {
+    margin: 12px -8px;
+    padding: 12px;
+  }
+  
+  .graphLoading {
+    padding: 12px 16px;
+  }
+  
+  .graphTitle {
+    font-size: 14px;
+    margin-bottom: 12px;
   }
 }
