@@ -136,20 +136,20 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 
                 GRAPHS: When presenting numerical data, trends, comparisons, or relationships that would benefit from visual representation, use the special graph syntax:
                 §GRAPH§
-                {
+                {{
                   "type": "line|bar|scatter",
                   "title": "Chart Title (optional)",
-                  "xAxis": {"label": "X Axis Label", "type": "category|number"},
-                  "yAxis": {"label": "Y Axis Label"},
+                  "xAxis": {{"label": "X Axis Label", "type": "category|number"}},
+                  "yAxis": {{"label": "Y Axis Label"}},
                   "data": [
-                    {"x": "Label1", "series1": 100, "series2": 150},
-                    {"x": "Label2", "series1": 120, "series2": 170}
+                    {{"x": "Label1", "series1": 100, "series2": 150}},
+                    {{"x": "Label2", "series1": 120, "series2": 170}}
                   ],
                   "series": [
-                    {"key": "series1", "name": "Display Name 1"},
-                    {"key": "series2", "name": "Display Name 2"}
+                    {{"key": "series1", "name": "Display Name 1"}},
+                    {{"key": "series2", "name": "Display Name 2"}}
                   ]
-                }
+                }}
                 §/GRAPH§
                 Graph type guidelines:
                 - "line": Use for trends over time, continuous data, multiple series comparisons
@@ -159,7 +159,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Use valid JSON inside the markers
                 - "data" array contains objects where "x" is the x-axis value
                 - "series" defines each line/bar series with a "key" (matching data keys) and "name" (display label)
-                - For scatter plots, use numeric x values and include y key: {"x": 10, "y": 25}
+                - For scatter plots, use numeric x values and include y key: {{"x": 10, "y": 25}}
                 - Support up to 6 series per graph
                 - Do NOT use markdown code blocks for graphs, always use §GRAPH§ format
                 - IMPORTANT: Use exactly §GRAPH§ to start and §/GRAPH§ to end (with the § symbol)
