@@ -360,10 +360,16 @@ export default function DashboardPage() {
         let currentSearchHistory: SearchEntry[] = [];
 
         let receivedDone = false;
+        let chunkCount = 0;
 
+        console.log('[STREAM DEBUG] Starting streaming loop for chat:', chatId);
         while (true) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) {
+            console.log('[STREAM DEBUG] Stream reader done - exiting loop. Total chunks:', chunkCount);
+            break;
+          }
+          chunkCount++;
 
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
@@ -445,7 +451,14 @@ export default function DashboardPage() {
                   );
                   
                   // Only update React state if still viewing this chat
-                  if (streamingChatRef.current.visibleChatId === chatId) {
+                  const shouldUpdate = streamingChatRef.current.visibleChatId === chatId;
+                  console.log('[STREAM DEBUG] Content chunk received:', { 
+                    visibleChatId: streamingChatRef.current.visibleChatId, 
+                    streamingChatId: chatId,
+                    shouldUpdateUI: shouldUpdate,
+                    contentLength: accumulatedContent.length 
+                  });
+                  if (shouldUpdate) {
                     setMessages(streamingChatRef.current.messages);
                   }
                 } else if (data.type === 'done') {
