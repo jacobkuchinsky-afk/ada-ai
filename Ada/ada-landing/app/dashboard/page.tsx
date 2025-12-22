@@ -56,6 +56,9 @@ export default function DashboardPage() {
   // Out of credits modal state
   const [showOutOfCreditsModal, setShowOutOfCreditsModal] = useState(false);
 
+  // Save error state for user feedback
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   useEffect(() => {
     if (!loading) {
       if (!user) {
@@ -167,8 +170,9 @@ export default function DashboardPage() {
     async (chatId: string) => {
       if (!user || chatId === currentChatId) return;
 
-      // If currently streaming this chat, update the ref to track we're switching away
-      if (isLoading && streamingChatRef.current.chatId === currentChatId) {
+      // If streaming is active (anywhere), preserve state in ref before switching
+      // Use ref-based check instead of state to avoid timing issues with async state updates
+      if (isLoading && streamingChatRef.current.chatId !== null) {
         // Save current messages to ref before switching
         streamingChatRef.current.messages = [...messages];
         streamingChatRef.current.visibleChatId = chatId;  // Track that we're now viewing a different chat
@@ -189,8 +193,9 @@ export default function DashboardPage() {
           setCurrentChatId(fullChat.id);
           setMessages(fullChat.messages);
           setStatusMessage('');
-          // Only set isLoading false if not viewing the streaming chat
-          if (streamingChatRef.current.chatId !== chatId) {
+          // ONLY set isLoading false if NO streaming is active anywhere
+          // This keeps the streaming indicator visible even when viewing other chats
+          if (streamingChatRef.current.chatId === null) {
             setIsLoading(false);
           }
         }
@@ -457,8 +462,10 @@ export default function DashboardPage() {
                   if (chatId && user) {
                     try {
                       await updateChat(user.uid, chatId, finalMessages);
-                    } catch (saveError) {
-                      console.error('Error saving chat:', saveError);
+                      setSaveError(null); // Clear any previous error on success
+                    } catch (saveErr) {
+                      console.error('Error saving chat:', saveErr);
+                      setSaveError('Failed to save chat. Please check your connection.');
                     }
                   }
                   
@@ -534,8 +541,10 @@ export default function DashboardPage() {
           if (chatId && user) {
             try {
               await updateChat(user.uid, chatId, finalMessages);
-            } catch (saveError) {
-              console.error('Error saving chat:', saveError);
+              setSaveError(null); // Clear any previous error on success
+            } catch (saveErr) {
+              console.error('Error saving chat:', saveErr);
+              setSaveError('Failed to save chat. Please check your connection.');
             }
           }
           
@@ -579,8 +588,10 @@ export default function DashboardPage() {
         if (chatId && user) {
           try {
             await updateChat(user.uid, chatId, finalMessages);
-          } catch (saveError) {
-            console.error('Error saving chat:', saveError);
+            setSaveError(null); // Clear any previous error on success
+          } catch (saveErr) {
+            console.error('Error saving chat:', saveErr);
+            setSaveError('Failed to save chat. Please check your connection.');
           }
         }
         
@@ -597,7 +608,7 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     },
-    [getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits]
+    [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits]
   );
 
   if (loading) {
@@ -635,6 +646,19 @@ export default function DashboardPage() {
         isOpen={showOutOfCreditsModal}
         onClose={() => setShowOutOfCreditsModal(false)}
       />
+      {/* Save error toast */}
+      {saveError && (
+        <div className={styles.saveErrorToast}>
+          <span>{saveError}</span>
+          <button 
+            onClick={() => setSaveError(null)} 
+            className={styles.saveErrorClose}
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </main>
   );
 }
