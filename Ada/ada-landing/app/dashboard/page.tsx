@@ -268,8 +268,10 @@ export default function DashboardPage() {
             updatedAt: new Date(),
           };
           setChats((prev) => [newChatPreview, ...prev]);
-        } catch (error) {
-          console.error('Error creating chat:', error);
+        } catch (createErr) {
+          const errMsg = (createErr as Error).message || 'Unknown error creating chat';
+          console.error('Error creating chat:', createErr);
+          setSaveError(errMsg);
           return;
         }
       }
@@ -464,8 +466,9 @@ export default function DashboardPage() {
                       await updateChat(user.uid, chatId, finalMessages);
                       setSaveError(null); // Clear any previous error on success
                     } catch (saveErr) {
+                      const errMsg = (saveErr as Error).message || 'Unknown error';
                       console.error('Error saving chat:', saveErr);
-                      setSaveError('Failed to save chat. Please check your connection.');
+                      setSaveError(errMsg);
                     }
                   }
                   
@@ -543,8 +546,9 @@ export default function DashboardPage() {
               await updateChat(user.uid, chatId, finalMessages);
               setSaveError(null); // Clear any previous error on success
             } catch (saveErr) {
+              const errMsg = (saveErr as Error).message || 'Unknown error';
               console.error('Error saving chat:', saveErr);
-              setSaveError('Failed to save chat. Please check your connection.');
+              setSaveError(errMsg);
             }
           }
           
@@ -590,8 +594,9 @@ export default function DashboardPage() {
             await updateChat(user.uid, chatId, finalMessages);
             setSaveError(null); // Clear any previous error on success
           } catch (saveErr) {
+            const errMsg = (saveErr as Error).message || 'Unknown error';
             console.error('Error saving chat:', saveErr);
-            setSaveError('Failed to save chat. Please check your connection.');
+            setSaveError(errMsg);
           }
         }
         

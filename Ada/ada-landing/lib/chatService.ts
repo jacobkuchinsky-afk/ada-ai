@@ -52,6 +52,10 @@ export async function createChat(
   userId: string,
   firstMessage: string
 ): Promise<string> {
+  if (!userId) {
+    throw new Error('CREATE_ERROR: No user ID provided');
+  }
+
   const chatsRef = collection(db, "users", userId, "chats");
 
   const newChat = {
@@ -61,8 +65,19 @@ export async function createChat(
     messages: [],
   };
 
-  const docRef = await addDoc(chatsRef, newChat);
-  return docRef.id;
+  try {
+    const docRef = await addDoc(chatsRef, newChat);
+    return docRef.id;
+  } catch (firebaseError) {
+    const err = firebaseError as { code?: string; message?: string };
+    if (err.code === 'permission-denied') {
+      throw new Error('CREATE_ERROR: Permission denied - Firestore security rules may not be configured. Please check Firebase Console.');
+    } else if (err.code === 'unavailable') {
+      throw new Error('CREATE_ERROR: Firebase service unavailable - check your internet connection');
+    } else {
+      throw new Error(`CREATE_ERROR: Firebase error (${err.code || 'unknown'}): ${err.message || 'Unknown error'}`);
+    }
+  }
 }
 
 /**
@@ -73,24 +88,53 @@ export async function updateChat(
   chatId: string,
   messages: Message[]
 ): Promise<void> {
+  // Validate inputs
+  if (!userId) {
+    throw new Error('SAVE_ERROR: No user ID provided');
+  }
+  if (!chatId) {
+    throw new Error('SAVE_ERROR: No chat ID provided');
+  }
+  if (!messages || messages.length === 0) {
+    throw new Error('SAVE_ERROR: No messages to save');
+  }
+
   const chatRef = doc(db, "users", userId, "chats", chatId);
 
   // Serialize messages - remove non-serializable fields
   // Note: rawSearchData is stored for summarization on next message
   // We cap it at 50KB per message to avoid Firebase document size limits
-  const serializedMessages = messages.map((msg) => ({
-    id: msg.id,
-    role: msg.role,
-    content: msg.content,
-    searchHistory: msg.searchHistory || [],
-    rawSearchData: msg.rawSearchData ? msg.rawSearchData.substring(0, 50000) : undefined,
-    // Don't store streaming state
-  }));
+  let serializedMessages;
+  try {
+    serializedMessages = messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role,
+      content: msg.content,
+      searchHistory: msg.searchHistory || [],
+      rawSearchData: msg.rawSearchData ? msg.rawSearchData.substring(0, 50000) : undefined,
+      // Don't store streaming state
+    }));
+  } catch (serializeError) {
+    throw new Error(`SAVE_ERROR: Failed to serialize messages - ${(serializeError as Error).message}`);
+  }
 
-  await updateDoc(chatRef, {
-    messages: serializedMessages,
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    await updateDoc(chatRef, {
+      messages: serializedMessages,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (firebaseError) {
+    const err = firebaseError as { code?: string; message?: string };
+    if (err.code === 'permission-denied') {
+      throw new Error('SAVE_ERROR: Permission denied - Firestore security rules may not be configured. Please check Firebase Console.');
+    } else if (err.code === 'not-found') {
+      throw new Error(`SAVE_ERROR: Chat document not found (chatId: ${chatId})`);
+    } else if (err.code === 'unavailable') {
+      throw new Error('SAVE_ERROR: Firebase service unavailable - check your internet connection');
+    } else {
+      throw new Error(`SAVE_ERROR: Firebase error (${err.code || 'unknown'}): ${err.message || 'Unknown error'}`);
+    }
+  }
 }
 
 /**
