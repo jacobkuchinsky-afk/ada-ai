@@ -60,11 +60,22 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
   // Check if any search is currently in progress
   const hasActiveSearch = searchHistory.some(s => s.status === 'searching');
   
-  // Show skip button when: streaming, has active search, canSkip is true, and callback exists
-  const showSkipButton = isStreaming && hasActiveSearch && canSkip && onSkipSearch;
+  // Show skip button when: streaming, canSkip is true, and callback exists
+  const showSkipButton = isStreaming && canSkip && onSkipSearch;
 
   return (
     <div className={styles.searchStatusContainer}>
+      {/* Single Skip Button at the top when in goodness loop */}
+      {showSkipButton && (
+        <button 
+          className={styles.skipSearchButtonInline}
+          onClick={onSkipSearch}
+          type="button"
+        >
+          ⏭ Skip & Generate
+        </button>
+      )}
+      
       {/* Search History Pills */}
       <div className={styles.searchHistoryList}>
         {searchHistory.map((search) => {
@@ -74,44 +85,31 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
           
           return (
             <div key={searchKey} className={styles.searchEntry}>
-              <div className={styles.searchPillRow}>
-                <button
-                  className={`${styles.searchPill} ${isExpanded ? styles.searchPillExpanded : ''} ${isSearching ? styles.searchPillSearching : ''}`}
-                  onClick={() => !isSearching && toggleSearch(searchKey)}
-                  disabled={isSearching}
-                >
-                  <span className={styles.searchIconText}>
-                    {isSearching ? 'searching' : 'searched'}
+              <button
+                className={`${styles.searchPill} ${isExpanded ? styles.searchPillExpanded : ''} ${isSearching ? styles.searchPillSearching : ''}`}
+                onClick={() => !isSearching && toggleSearch(searchKey)}
+                disabled={isSearching}
+              >
+                <span className={styles.searchIconText}>
+                  {isSearching ? 'searching' : 'searched'}
+                </span>
+                <span className={styles.searchQuery}>
+                  {search.query.length > 50 
+                    ? search.query.substring(0, 50) + '...' 
+                    : search.query
+                  }
+                </span>
+                {!isSearching && search.sources.length > 0 && (
+                  <span className={styles.sourceCount}>
+                    {search.sources.length} sources
                   </span>
-                  <span className={styles.searchQuery}>
-                    {search.query.length > 50 
-                      ? search.query.substring(0, 50) + '...' 
-                      : search.query
-                    }
-                  </span>
-                  {!isSearching && search.sources.length > 0 && (
-                    <span className={styles.sourceCount}>
-                      {search.sources.length} sources
-                    </span>
-                  )}
-                  {!isSearching && (
-                    <span className={styles.expandIcon}>
-                      {isExpanded ? '▼' : '▶'}
-                    </span>
-                  )}
-                </button>
-                
-                {/* Skip button appears next to the FIRST active search pill */}
-                {isSearching && showSkipButton && search === searchHistory.find(s => s.status === 'searching') && (
-                  <button 
-                    className={styles.skipSearchButtonInline}
-                    onClick={onSkipSearch}
-                    type="button"
-                  >
-                    ⏭ Skip
-                  </button>
                 )}
-              </div>
+                {!isSearching && (
+                  <span className={styles.expandIcon}>
+                    {isExpanded ? '▼' : '▶'}
+                  </span>
+                )}
+              </button>
               
               {/* Expanded Source List */}
               {isExpanded && search.sources.length > 0 && (
