@@ -23,6 +23,7 @@ export interface StatusInfo {
   message: string;
   step: number;
   icon: 'thinking' | 'searching' | 'evaluating' | 'generating';
+  canSkip?: boolean;  // True when user can skip searching and go to generation
 }
 
 interface SearchStatusProps {
