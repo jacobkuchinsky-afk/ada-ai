@@ -184,28 +184,26 @@ export default function DashboardPage() {
         return;
       }
 
-      // If streaming is active (anywhere), preserve state in ref before switching
-      // Use ref-based check instead of state to avoid timing issues with async state updates
-      if (isLoading && streamingChatRef.current.chatId !== null) {
-        // Save current messages to ref before switching
-        console.log('[SWITCH DEBUG] Saving current messages to ref before switching away');
-        streamingChatRef.current.messages = [...messages];
-        streamingChatRef.current.visibleChatId = chatId;  // Track that we're now viewing a different chat
-      }
-
-      // Check if switching back to the streaming chat - restore from ref
-      // Use ref's chatId for comparison since state might be stale
+      // FIRST: Check if we're switching TO the streaming chat - restore from ref immediately
+      // The ref is always the source of truth for the streaming chat's messages
       if (streamingChatRef.current.chatId === chatId) {
-        console.log('[SWITCH DEBUG] Switching BACK to streaming chat - restoring from ref');
+        console.log('[SWITCH DEBUG] Switching TO streaming chat - restoring from ref');
         console.log('[SWITCH DEBUG] Ref messages to restore:', streamingChatRef.current.messages.length);
         setCurrentChatId(chatId);
         setMessages(streamingChatRef.current.messages);
-        streamingChatRef.current.visibleChatId = chatId;  // Back to viewing the streaming chat
+        streamingChatRef.current.visibleChatId = chatId;  // Now viewing the streaming chat
         return;
       }
 
-      // Otherwise load from Firebase
-      console.log('[SWITCH DEBUG] Loading different chat from Firebase');
+      // If there's active streaming, just update which chat we're viewing
+      // DO NOT overwrite ref.messages - the streaming loop keeps it updated
+      if (streamingChatRef.current.chatId !== null) {
+        console.log('[SWITCH DEBUG] Streaming active, updating visibleChatId to:', chatId);
+        streamingChatRef.current.visibleChatId = chatId;
+      }
+
+      // Load the non-streaming chat from Firebase
+      console.log('[SWITCH DEBUG] Loading chat from Firebase:', chatId);
       try {
         const fullChat = await getChat(user.uid, chatId);
         if (fullChat) {
@@ -213,7 +211,6 @@ export default function DashboardPage() {
           setMessages(fullChat.messages);
           setStatusMessage('');
           // ONLY set isLoading false if NO streaming is active anywhere
-          // This keeps the streaming indicator visible even when viewing other chats
           if (streamingChatRef.current.chatId === null) {
             setIsLoading(false);
           }
@@ -222,7 +219,7 @@ export default function DashboardPage() {
         console.error('Error loading chat:', error);
       }
     },
-    [user, currentChatId, isLoading, messages]
+    [user, currentChatId, isLoading]
   );
 
   const handleDeleteChat = useCallback(
