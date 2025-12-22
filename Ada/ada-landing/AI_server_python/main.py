@@ -435,12 +435,24 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         )
     
     while searching and iter_count < 4:
-        # Step 1: Generate search query
+        # Check for skip request at the start of each iteration
+        if session_id and check_skip_search(session_id):
+            yield {
+                "type": "status",
+                "message": "Search skipped by user, generating response...",
+                "step": 3,
+                "icon": "thinking",
+                "canSkip": False
+            }
+            break
+        
+        # Step 1: Generate search query - canSkip=True so button appears during search loop
         yield {
             "type": "status", 
             "message": "Thinking...", 
             "step": 1, 
-            "icon": "thinking"
+            "icon": "thinking",
+            "canSkip": True  # Allow skip during entire search loop
         }
         
         if iter_count > 0 and not service_failure_detected:
@@ -478,13 +490,26 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         depth = 5  # 5 sources per query (reduced from 8 to prevent memory issues)
         
-        # Step 2: Send initial searching status for each query
+        # Check for skip before starting searches
+        if session_id and check_skip_search(session_id):
+            yield {
+                "type": "status",
+                "message": "Search skipped by user, generating response...",
+                "step": 3,
+                "icon": "thinking",
+                "canSkip": False
+            }
+            searching = False
+            break
+        
+        # Step 2: Send initial searching status for each query - canSkip=True
         for q_idx, q in enumerate(queries):
             yield {
                 "type": "status", 
                 "message": f"Searching ({q_idx + 1}/{len(queries)}): {q[:50]}{'...' if len(q) > 50 else ''}", 
                 "step": 2, 
-                "icon": "searching"
+                "icon": "searching",
+                "canSkip": True  # Allow skip during search
             }
             # Send search event immediately with query (sources pending)
             yield {

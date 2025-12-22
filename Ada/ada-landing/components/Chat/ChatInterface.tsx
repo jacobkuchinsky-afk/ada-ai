@@ -47,7 +47,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, stat
             <ChatMessage 
               key={message.id} 
               message={message} 
-              onSkipSearch={message.isStreaming ? onSkipSearch : undefined}
+              onSkipSearch={onSkipSearch}
             />
           ))}
           <div ref={messagesEndRef} />
