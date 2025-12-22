@@ -522,51 +522,33 @@
   gap: 6px;
 }
 
-/* Row container for search pill + skip button */
-.searchPillRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Inline skip button next to search pill */
+/* Skip button - soft purple, no glow */
 .skipSearchButtonInline {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(236, 72, 153, 0.25));
-  border: 2px solid rgba(139, 92, 246, 0.6);
+  background: rgba(147, 112, 219, 0.12);
+  border: 1px solid rgba(147, 112, 219, 0.35);
   border-radius: 20px;
-  color: rgba(255, 255, 255, 0.95);
+  color: rgba(200, 180, 230, 0.95);
   font-family: var(--font-ubuntu), sans-serif;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  animation: skipInlinePulse 1.5s ease-in-out infinite;
   white-space: nowrap;
   flex-shrink: 0;
 }
 
 .skipSearchButtonInline:hover {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.4), rgba(236, 72, 153, 0.4));
-  border-color: rgba(139, 92, 246, 0.9);
-  transform: scale(1.05);
-  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4);
+  background: rgba(147, 112, 219, 0.2);
+  border-color: rgba(147, 112, 219, 0.5);
+  color: rgba(220, 200, 245, 1);
 }
 
 .skipSearchButtonInline:active {
   transform: scale(0.98);
-}
-
-@keyframes skipInlinePulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 6px rgba(139, 92, 246, 0);
-  }
 }
 
 /* Clickable Search Pill */

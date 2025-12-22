@@ -465,8 +465,11 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         )
     
     while searching and iter_count < 4:
-        # Check for skip request at the start of each iteration
-        if session_id and check_skip_search(session_id):
+        # Only allow skip after first iteration (when goodness loop decides more search needed)
+        in_goodness_loop = iter_count > 0
+        
+        # Check for skip request at the start of each iteration (only if in goodness loop)
+        if in_goodness_loop and session_id and check_skip_search(session_id):
             yield {
                 "type": "status",
                 "message": "Search skipped by user, generating response...",
@@ -476,13 +479,13 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             break
         
-        # Step 1: Generate search query - canSkip=True so button appears during search loop
+        # Step 1: Generate search query - canSkip only after first search (goodness loop)
         yield {
             "type": "status", 
             "message": "Thinking...", 
             "step": 1, 
             "icon": "thinking",
-            "canSkip": True  # Allow skip during entire search loop
+            "canSkip": in_goodness_loop  # Only allow skip in goodness loop (iter > 0)
         }
         
         if iter_count > 0 and not service_failure_detected:
@@ -520,8 +523,8 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         depth = 5  # 5 sources per query (reduced from 8 to prevent memory issues)
         
-        # Check for skip before starting searches
-        if session_id and check_skip_search(session_id):
+        # Check for skip before starting searches (only if in goodness loop)
+        if in_goodness_loop and session_id and check_skip_search(session_id):
             yield {
                 "type": "status",
                 "message": "Search skipped by user, generating response...",
@@ -532,14 +535,14 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             searching = False
             break
         
-        # Step 2: Send initial searching status for each query - canSkip=True
+        # Step 2: Send initial searching status for each query - canSkip only in goodness loop
         for q_idx, q in enumerate(queries):
             yield {
                 "type": "status", 
                 "message": f"Searching ({q_idx + 1}/{len(queries)}): {q[:50]}{'...' if len(q) > 50 else ''}", 
                 "step": 2, 
                 "icon": "searching",
-                "canSkip": True  # Allow skip during search
+                "canSkip": in_goodness_loop  # Only allow skip in goodness loop
             }
             # Send search event immediately with query (sources pending)
             yield {
@@ -619,8 +622,8 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             break
         
-        # Check if user requested to skip search BEFORE evaluation
-        if session_id and check_skip_search(session_id):
+        # Check if user requested to skip search BEFORE evaluation (only in goodness loop)
+        if in_goodness_loop and session_id and check_skip_search(session_id):
             searching = False
             yield {
                 "type": "status",
@@ -630,17 +633,17 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             break
         
-        # Step 3: Evaluate results - show evaluating status with skip option available
+        # Step 3: Evaluate results - canSkip only in goodness loop
         yield {
             "type": "status", 
             "message": "Evaluating search results...", 
             "step": 3, 
             "icon": "evaluating",
-            "canSkip": True  # Signal to frontend that skip is available
+            "canSkip": in_goodness_loop  # Only allow skip in goodness loop
         }
         
         # Check again after yielding (user may have clicked skip while status was shown)
-        if session_id and check_skip_search(session_id):
+        if in_goodness_loop and session_id and check_skip_search(session_id):
             searching = False
             yield {
                 "type": "status",
@@ -660,8 +663,8 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         # Clean AI output to remove thinking tags
         good = clean_ai_output(good)
         
-        # Check for skip request after evaluation AI call (it may take a while)
-        if session_id and check_skip_search(session_id):
+        # Check for skip request after evaluation AI call (it may take a while) - only in goodness loop
+        if in_goodness_loop and session_id and check_skip_search(session_id):
             searching = False
             yield {
                 "type": "status",

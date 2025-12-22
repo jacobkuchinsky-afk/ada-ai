@@ -56,11 +56,40 @@ function parseTableData(tableContent: string): ParsedTable | null {
 // Parse JSON graph data into structured format
 function parseGraphData(graphContent: string): GraphData | null {
   try {
-    const parsed = JSON.parse(graphContent.trim());
-    if (!parsed.data || !Array.isArray(parsed.data)) return null;
-    if (!parsed.series || !Array.isArray(parsed.series)) return null;
+    // Clean up the content - remove leading/trailing whitespace and newlines
+    let cleanContent = graphContent.trim();
+    
+    // Try to find JSON object boundaries if there's extra content
+    const jsonStart = cleanContent.indexOf('{');
+    const jsonEnd = cleanContent.lastIndexOf('}');
+    
+    if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+      console.error('Graph parse error: No valid JSON object found in:', cleanContent.substring(0, 100));
+      return null;
+    }
+    
+    // Extract just the JSON portion
+    cleanContent = cleanContent.substring(jsonStart, jsonEnd + 1);
+    
+    const parsed = JSON.parse(cleanContent);
+    
+    // Validate required fields
+    if (!parsed.data || !Array.isArray(parsed.data)) {
+      console.error('Graph parse error: Missing or invalid "data" array');
+      return null;
+    }
+    if (!parsed.series || !Array.isArray(parsed.series)) {
+      console.error('Graph parse error: Missing or invalid "series" array');
+      return null;
+    }
+    if (!parsed.type) {
+      console.error('Graph parse error: Missing "type" field');
+      return null;
+    }
+    
     return parsed as GraphData;
-  } catch {
+  } catch (e) {
+    console.error('Graph JSON parse error:', e, 'Content:', graphContent.substring(0, 200));
     return null;
   }
 }
@@ -236,8 +265,18 @@ const GRAPH_COLORS = ['#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#e
 function DataGraph({ graphContent }: { graphContent: string }) {
   const graphData = parseGraphData(graphContent);
   
-  if (!graphData || graphData.data.length === 0) {
-    return <div className={styles.graphError}>Unable to parse graph data</div>;
+  if (!graphData) {
+    // Log the content for debugging
+    console.error('Failed to parse graph. Raw content:', graphContent);
+    return (
+      <div className={styles.graphError}>
+        Unable to parse graph data. Check browser console for details.
+      </div>
+    );
+  }
+  
+  if (graphData.data.length === 0) {
+    return <div className={styles.graphError}>Graph has no data points</div>;
   }
   
   const { type, title, xAxis, yAxis, data, series } = graphData;
