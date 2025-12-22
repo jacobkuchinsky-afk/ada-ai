@@ -468,14 +468,19 @@ export default function DashboardPage() {
 
                   // Save directly with correct chatId and messages from ref
                   if (chatId && user) {
+                    console.log('[SAVE DEBUG] Attempting to save chat:', { chatId, userId: user.uid, messageCount: finalMessages.length });
                     try {
                       await updateChat(user.uid, chatId, finalMessages);
+                      console.log('[SAVE DEBUG] Chat saved successfully');
                       setSaveError(null); // Clear any previous error on success
                     } catch (saveErr) {
                       const errMsg = (saveErr as Error).message || 'Unknown error';
-                      console.error('Error saving chat:', saveErr);
+                      console.error('[SAVE DEBUG] Save failed with error:', saveErr);
+                      console.error('[SAVE DEBUG] Error message to display:', errMsg);
                       setSaveError(errMsg);
                     }
+                  } else {
+                    console.warn('[SAVE DEBUG] Cannot save - missing chatId or user:', { chatId, hasUser: !!user });
                   }
                   
                   // Clear streaming ref - streaming is complete

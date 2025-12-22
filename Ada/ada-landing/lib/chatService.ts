@@ -118,13 +118,17 @@ export async function updateChat(
     throw new Error(`SAVE_ERROR: Failed to serialize messages - ${(serializeError as Error).message}`);
   }
 
+  console.log('[FIREBASE DEBUG] Attempting updateDoc on path:', chatRef.path);
+  console.log('[FIREBASE DEBUG] Serialized message count:', serializedMessages.length);
   try {
     await updateDoc(chatRef, {
       messages: serializedMessages,
       updatedAt: serverTimestamp(),
     });
+    console.log('[FIREBASE DEBUG] updateDoc succeeded');
   } catch (firebaseError) {
     const err = firebaseError as { code?: string; message?: string };
+    console.error('[FIREBASE DEBUG] updateDoc failed:', { code: err.code, message: err.message, fullError: firebaseError });
     if (err.code === 'permission-denied') {
       throw new Error('SAVE_ERROR: Permission denied - Firestore security rules may not be configured. Please check Firebase Console.');
     } else if (err.code === 'not-found') {
