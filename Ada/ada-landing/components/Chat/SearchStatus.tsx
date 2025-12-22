@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import styles from './Chat.module.css';
+import TextTicker from './TextTicker';
 
 // Types for search functionality
 export interface SourceInfo {
@@ -17,6 +18,7 @@ export interface SearchEntry {
   iteration: number;
   queryIndex?: number;  // For parallel queries within same iteration
   status?: 'searching' | 'complete';
+  textPreview?: string;  // Text preview from first source for visual feedback
 }
 
 export interface StatusInfo {
@@ -32,9 +34,10 @@ interface SearchStatusProps {
   isStreaming: boolean;
   onSkipSearch?: () => void;  // Callback to skip searching
   canSkip?: boolean;  // Whether skip is currently available
+  textPreview?: string;  // Text preview for ticker animation
 }
 
-export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSkipSearch }: SearchStatusProps) {
+export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSkipSearch, textPreview }: SearchStatusProps) {
   const [expandedSearches, setExpandedSearches] = useState<Set<string>>(new Set());
 
   // Create unique key for each search using iteration and queryIndex
@@ -63,6 +66,9 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
   // Show skip button when: streaming, canSkip is true, and callback exists
   const showSkipButton = isStreaming && canSkip && onSkipSearch;
 
+  // Get text preview from the most recent search entry that has one
+  const activeTextPreview = textPreview || searchHistory.find(s => s.textPreview)?.textPreview;
+
   return (
     <div className={styles.searchStatusContainer}>
       {/* Single Skip Button at the top when in goodness loop */}
@@ -74,6 +80,14 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
         >
           ⏭ Skip & Generate
         </button>
+      )}
+      
+      {/* Text Ticker - shows parsed text flying through during active search */}
+      {hasActiveSearch && activeTextPreview && (
+        <TextTicker 
+          text={activeTextPreview} 
+          isActive={hasActiveSearch} 
+        />
       )}
       
       {/* Search History Pills */}

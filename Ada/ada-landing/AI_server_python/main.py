@@ -600,8 +600,8 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             search_history.append(search_entry)
             
-            # Send updated search event with sources
-            yield {
+            # Build search event with sources
+            search_event = {
                 "type": "search",
                 "query": q,
                 "sources": sources,
@@ -609,6 +609,14 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
                 "queryIndex": idx + 1,
                 "status": "complete"
             }
+            
+            # Include text preview for first query only (for visual parsing feedback)
+            if idx == 0 and full_text and len(full_text) > 50:
+                # Get first 500 chars of actual content (skip source headers)
+                text_preview = full_text[:500].replace('\n', ' ').strip()
+                search_event["textPreview"] = text_preview
+            
+            yield search_event
         
         # If search service is down, exit the loop - don't waste time evaluating or retrying
         if service_failure_detected:

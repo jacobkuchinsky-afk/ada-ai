@@ -408,6 +408,7 @@ export default function DashboardPage() {
                     iteration: data.iteration,
                     queryIndex: data.queryIndex,  // Include queryIndex for parallel queries
                     status: data.status,
+                    textPreview: data.textPreview,  // Text preview for visual parsing feedback
                   };
 
                   // Update or add search entry - use both iteration AND queryIndex for uniqueness
@@ -416,8 +417,11 @@ export default function DashboardPage() {
                   );
 
                   if (existingIndex >= 0) {
-                    // Update existing search with sources
-                    currentSearchHistory[existingIndex] = searchEntry;
+                    // Update existing search with sources (preserve textPreview if new one doesn't have it)
+                    currentSearchHistory[existingIndex] = {
+                      ...searchEntry,
+                      textPreview: searchEntry.textPreview || currentSearchHistory[existingIndex].textPreview,
+                    };
                   } else {
                     // Add new search
                     currentSearchHistory = [...currentSearchHistory, searchEntry];
