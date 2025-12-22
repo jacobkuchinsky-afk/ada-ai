@@ -611,10 +611,15 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             
             # Include text preview for first query only (for visual parsing feedback)
-            if idx == 0 and full_text and len(full_text) > 50:
-                # Get first 500 chars of actual content (skip source headers)
-                text_preview = full_text[:500].replace('\n', ' ').strip()
-                search_event["textPreview"] = text_preview
+            if idx == 0:
+                print(f"[TEXTPREVIEW DEBUG] idx=0, full_text_len={len(full_text) if full_text else 0}, has_text={bool(full_text)}")
+                if full_text and len(full_text) > 50:
+                    # Get first 500 chars of actual content (skip source headers)
+                    text_preview = full_text[:500].replace('\n', ' ').strip()
+                    search_event["textPreview"] = text_preview
+                    print(f"[TEXTPREVIEW DEBUG] Added textPreview, length={len(text_preview)}")
+                else:
+                    print(f"[TEXTPREVIEW DEBUG] Skipped - full_text too short or empty")
             
             yield search_event
         
