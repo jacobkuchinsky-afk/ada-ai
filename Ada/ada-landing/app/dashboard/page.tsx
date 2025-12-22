@@ -170,18 +170,34 @@ export default function DashboardPage() {
 
   const handleSelectChat = useCallback(
     async (chatId: string) => {
-      if (!user || chatId === currentChatId) return;
+      console.log('[SWITCH DEBUG] handleSelectChat called:', { 
+        targetChatId: chatId, 
+        currentChatId, 
+        isLoading,
+        streamingChatId: streamingChatRef.current.chatId,
+        streamingVisibleChatId: streamingChatRef.current.visibleChatId,
+        streamingMessagesCount: streamingChatRef.current.messages.length
+      });
+      
+      if (!user || chatId === currentChatId) {
+        console.log('[SWITCH DEBUG] Early return - no user or same chat');
+        return;
+      }
 
       // If streaming is active (anywhere), preserve state in ref before switching
       // Use ref-based check instead of state to avoid timing issues with async state updates
       if (isLoading && streamingChatRef.current.chatId !== null) {
         // Save current messages to ref before switching
+        console.log('[SWITCH DEBUG] Saving current messages to ref before switching away');
         streamingChatRef.current.messages = [...messages];
         streamingChatRef.current.visibleChatId = chatId;  // Track that we're now viewing a different chat
       }
 
       // Check if switching back to the streaming chat - restore from ref
-      if (streamingChatRef.current.chatId === chatId && isLoading) {
+      // Use ref's chatId for comparison since state might be stale
+      if (streamingChatRef.current.chatId === chatId) {
+        console.log('[SWITCH DEBUG] Switching BACK to streaming chat - restoring from ref');
+        console.log('[SWITCH DEBUG] Ref messages to restore:', streamingChatRef.current.messages.length);
         setCurrentChatId(chatId);
         setMessages(streamingChatRef.current.messages);
         streamingChatRef.current.visibleChatId = chatId;  // Back to viewing the streaming chat
@@ -189,6 +205,7 @@ export default function DashboardPage() {
       }
 
       // Otherwise load from Firebase
+      console.log('[SWITCH DEBUG] Loading different chat from Firebase');
       try {
         const fullChat = await getChat(user.uid, chatId);
         if (fullChat) {
