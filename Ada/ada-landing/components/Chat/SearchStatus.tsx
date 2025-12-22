@@ -72,6 +72,17 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
   // Show ticker during search phase: streaming, have text preview, and not yet generating response
   const isGenerating = status?.icon === 'generating';
   const showTicker = isStreaming && activeTextPreview && !isGenerating;
+  
+  // Debug logging
+  console.log('[TICKER DEBUG]', {
+    isStreaming,
+    hasTextPreviewProp: !!textPreview,
+    foundTextPreview: !!searchHistory.find(s => s.textPreview),
+    activeTextPreview: activeTextPreview?.substring(0, 50),
+    isGenerating,
+    showTicker,
+    searchHistoryLength: searchHistory.length,
+  });
 
   return (
     <div className={styles.searchStatusContainer}>
