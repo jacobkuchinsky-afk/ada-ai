@@ -30,9 +30,11 @@ interface SearchStatusProps {
   status?: StatusInfo | null;
   searchHistory: SearchEntry[];
   isStreaming: boolean;
+  onSkipSearch?: () => void;  // Callback to skip searching
+  canSkip?: boolean;  // Whether skip is currently available
 }
 
-export default function SearchStatus({ searchHistory }: SearchStatusProps) {
+export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSkipSearch }: SearchStatusProps) {
   const [expandedSearches, setExpandedSearches] = useState<Set<string>>(new Set());
 
   // Create unique key for each search using iteration and queryIndex
@@ -55,6 +57,12 @@ export default function SearchStatus({ searchHistory }: SearchStatusProps) {
     return null;
   }
 
+  // Check if any search is currently in progress
+  const hasActiveSearch = searchHistory.some(s => s.status === 'searching');
+  
+  // Show skip button when: streaming, has active search, canSkip is true, and callback exists
+  const showSkipButton = isStreaming && hasActiveSearch && canSkip && onSkipSearch;
+
   return (
     <div className={styles.searchStatusContainer}>
       {/* Search History Pills */}
@@ -66,31 +74,44 @@ export default function SearchStatus({ searchHistory }: SearchStatusProps) {
           
           return (
             <div key={searchKey} className={styles.searchEntry}>
-              <button
-                className={`${styles.searchPill} ${isExpanded ? styles.searchPillExpanded : ''} ${isSearching ? styles.searchPillSearching : ''}`}
-                onClick={() => !isSearching && toggleSearch(searchKey)}
-                disabled={isSearching}
-              >
-                <span className={styles.searchIconText}>
-                  {isSearching ? 'searching' : 'searched'}
-                </span>
-                <span className={styles.searchQuery}>
-                  {search.query.length > 50 
-                    ? search.query.substring(0, 50) + '...' 
-                    : search.query
-                  }
-                </span>
-                {!isSearching && search.sources.length > 0 && (
-                  <span className={styles.sourceCount}>
-                    {search.sources.length} sources
+              <div className={styles.searchPillRow}>
+                <button
+                  className={`${styles.searchPill} ${isExpanded ? styles.searchPillExpanded : ''} ${isSearching ? styles.searchPillSearching : ''}`}
+                  onClick={() => !isSearching && toggleSearch(searchKey)}
+                  disabled={isSearching}
+                >
+                  <span className={styles.searchIconText}>
+                    {isSearching ? 'searching' : 'searched'}
                   </span>
-                )}
-                {!isSearching && (
-                  <span className={styles.expandIcon}>
-                    {isExpanded ? '▼' : '▶'}
+                  <span className={styles.searchQuery}>
+                    {search.query.length > 50 
+                      ? search.query.substring(0, 50) + '...' 
+                      : search.query
+                    }
                   </span>
+                  {!isSearching && search.sources.length > 0 && (
+                    <span className={styles.sourceCount}>
+                      {search.sources.length} sources
+                    </span>
+                  )}
+                  {!isSearching && (
+                    <span className={styles.expandIcon}>
+                      {isExpanded ? '▼' : '▶'}
+                    </span>
+                  )}
+                </button>
+                
+                {/* Skip button appears next to the FIRST active search pill */}
+                {isSearching && showSkipButton && search === searchHistory.find(s => s.status === 'searching') && (
+                  <button 
+                    className={styles.skipSearchButtonInline}
+                    onClick={onSkipSearch}
+                    type="button"
+                  >
+                    ⏭ Skip
+                  </button>
                 )}
-              </button>
+              </div>
               
               {/* Expanded Source List */}
               {isExpanded && search.sources.length > 0 && (
