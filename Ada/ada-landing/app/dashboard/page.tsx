@@ -402,6 +402,12 @@ export default function DashboardPage() {
                   }
                 } else if (data.type === 'search') {
                   // Handle search event
+                  console.log('[SEARCH DEBUG] Received search event:', {
+                    query: data.query?.substring(0, 30),
+                    status: data.status,
+                    hasTextPreview: !!data.textPreview,
+                    textPreviewLength: data.textPreview?.length || 0,
+                  });
                   const searchEntry: SearchEntry = {
                     query: data.query,
                     sources: data.sources || [],
