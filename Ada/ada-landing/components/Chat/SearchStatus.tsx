@@ -69,19 +69,24 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
   // Get text preview from the most recent search entry that has one
   const activeTextPreview = textPreview || searchHistory.find(s => s.textPreview)?.textPreview;
   
-  // Show ticker during search phase: streaming, have text preview, and not yet generating response
-  const isGenerating = status?.icon === 'generating';
-  const showTicker = isStreaming && activeTextPreview && !isGenerating;
+  // Show ticker: when streaming, have text preview, and NOT in generating phase (step 4)
+  // Steps: 0=processing, 1=thinking, 2=searching, 3=evaluating, 4=generating
+  const statusStep = status?.step;
+  const isGeneratingPhase = statusStep === 4 || status === null; // null means content is streaming
+  const showTicker = isStreaming && !!activeTextPreview && !isGeneratingPhase;
   
   // Debug logging
   console.log('[TICKER DEBUG]', {
     isStreaming,
+    statusStep,
+    statusIcon: status?.icon,
+    isGeneratingPhase,
     hasTextPreviewProp: !!textPreview,
     foundTextPreview: !!searchHistory.find(s => s.textPreview),
     activeTextPreview: activeTextPreview?.substring(0, 50),
-    isGenerating,
     showTicker,
     searchHistoryLength: searchHistory.length,
+    hasActiveSearch,
   });
 
   return (
