@@ -400,6 +400,21 @@ export default function DashboardPage() {
                   if (streamingChatRef.current.visibleChatId === chatId) {
                     setMessages(streamingChatRef.current.messages);
                   }
+                } else if (data.type === 'text_preview') {
+                  // Handle text preview event - sent as soon as first source is scraped
+                  console.log('[TEXT_PREVIEW] Received:', data.text?.substring(0, 50));
+                  
+                  // Update ref messages with text preview
+                  streamingChatRef.current.messages = streamingChatRef.current.messages.map((m) =>
+                    m.id === assistantMessageId
+                      ? { ...m, textPreview: data.text }
+                      : m
+                  );
+                  
+                  // Only update React state if still viewing this chat
+                  if (streamingChatRef.current.visibleChatId === chatId) {
+                    setMessages(streamingChatRef.current.messages);
+                  }
                 } else if (data.type === 'search') {
                   // Handle search event
                   console.log('[SEARCH DEBUG] Received search event:', {

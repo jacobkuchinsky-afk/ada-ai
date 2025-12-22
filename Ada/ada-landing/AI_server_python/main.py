@@ -560,6 +560,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         # Store results with their query index for ordering
         search_results = {}
+        text_preview_sent = False  # Track if we've sent a text preview yet
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(queries)) as executor:
             future_to_query = {executor.submit(search_single_query, q): (idx, q) for idx, q in enumerate(queries)}
@@ -569,6 +570,19 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
                 try:
                     scrape_result = future.result()
                     search_results[idx] = (q, scrape_result)
+                    
+                    # Send text preview immediately when FIRST result with content arrives
+                    if not text_preview_sent:
+                        full_text = scrape_result.get('full_text', '')
+                        if full_text and len(full_text) > 50:
+                            text_preview = full_text[:800].replace('\n', ' ').strip()
+                            text_preview_sent = True
+                            print(f"[TEXTPREVIEW] Sending preview from query '{q[:30]}...', length={len(text_preview)}")
+                            yield {
+                                "type": "text_preview",
+                                "text": text_preview,
+                                "iteration": iter_count + 1
+                            }
                 except Exception as e:
                     print(f"Error searching query '{q}': {e}")
                     search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}', 'service_available': False})
@@ -609,17 +623,6 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
                 "queryIndex": idx + 1,
                 "status": "complete"
             }
-            
-            # Include text preview for first query only (for visual parsing feedback)
-            if idx == 0:
-                print(f"[TEXTPREVIEW DEBUG] idx=0, full_text_len={len(full_text) if full_text else 0}, has_text={bool(full_text)}")
-                if full_text and len(full_text) > 50:
-                    # Get first 500 chars of actual content (skip source headers)
-                    text_preview = full_text[:500].replace('\n', ' ').strip()
-                    search_event["textPreview"] = text_preview
-                    print(f"[TEXTPREVIEW DEBUG] Added textPreview, length={len(text_preview)}")
-                else:
-                    print(f"[TEXTPREVIEW DEBUG] Skipped - full_text too short or empty")
             
             yield search_event
         

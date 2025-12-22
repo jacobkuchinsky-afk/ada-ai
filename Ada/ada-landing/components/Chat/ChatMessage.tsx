@@ -17,6 +17,7 @@ export interface Message {
   searchHistory?: SearchEntry[];
   currentStatus?: StatusInfo | null;
   rawSearchData?: string;  // Raw search data for summarization on next message
+  textPreview?: string;  // Text preview for ticker animation during search
 }
 
 // Table parsing types
@@ -478,7 +479,7 @@ export default function ChatMessage({ message, onSkipSearch }: ChatMessageProps)
           isStreaming={message.isStreaming || false}
           canSkip={message.currentStatus?.canSkip}
           onSkipSearch={onSkipSearch}
-          textPreview={message.searchHistory.find(s => s.textPreview)?.textPreview}
+          textPreview={message.textPreview}
         />
       )}
       
