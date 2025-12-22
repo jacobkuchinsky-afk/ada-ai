@@ -285,28 +285,33 @@ function DataGraph({ graphContent }: { graphContent: string }) {
     switch (type) {
       case 'line':
         return (
-          <LineChart data={data}>
+          <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: xAxis?.label ? 50 : 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
             <XAxis 
               dataKey="x" 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
-              label={xAxis?.label ? {value: xAxis.label, position: 'bottom', fill: 'rgba(255,255,255,0.6)', dy: 10} : undefined} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
+              label={xAxis?.label ? {value: xAxis.label, position: 'insideBottom', fill: 'rgba(255,255,255,0.6)', dy: 35, fontSize: 12} : undefined} 
             />
             <YAxis 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
-              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)'} : undefined} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
+              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)', dx: -10, fontSize: 12} : undefined} 
             />
             <Tooltip 
               contentStyle={{
-                background: 'rgba(0,0,0,0.8)', 
+                background: 'rgba(0,0,0,0.9)', 
                 border: '1px solid rgba(255,255,255,0.2)', 
                 borderRadius: '8px',
-                color: 'rgba(255,255,255,0.9)'
+                color: 'rgba(255,255,255,0.9)',
+                fontSize: '13px'
               }} 
             />
-            <Legend />
+            <Legend 
+              verticalAlign="top" 
+              height={36}
+              wrapperStyle={{color: 'rgba(255,255,255,0.8)', fontSize: '13px'}}
+            />
             {series.map((s, idx) => (
               <Line 
                 key={s.key} 
@@ -315,33 +320,41 @@ function DataGraph({ graphContent }: { graphContent: string }) {
                 name={s.name} 
                 stroke={GRAPH_COLORS[idx % GRAPH_COLORS.length]} 
                 strokeWidth={2} 
-                dot={{fill: GRAPH_COLORS[idx % GRAPH_COLORS.length]}} 
+                dot={{fill: GRAPH_COLORS[idx % GRAPH_COLORS.length], r: 4}} 
+                activeDot={{r: 6}}
               />
             ))}
           </LineChart>
         );
       case 'bar':
         return (
-          <BarChart data={data}>
+          <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: xAxis?.label ? 50 : 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
             <XAxis 
               dataKey="x" 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
+              label={xAxis?.label ? {value: xAxis.label, position: 'insideBottom', fill: 'rgba(255,255,255,0.6)', dy: 35, fontSize: 12} : undefined}
             />
             <YAxis 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
+              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)', dx: -10, fontSize: 12} : undefined}
             />
             <Tooltip 
               contentStyle={{
-                background: 'rgba(0,0,0,0.8)', 
+                background: 'rgba(0,0,0,0.9)', 
                 border: '1px solid rgba(255,255,255,0.2)', 
                 borderRadius: '8px',
-                color: 'rgba(255,255,255,0.9)'
+                color: 'rgba(255,255,255,0.9)',
+                fontSize: '13px'
               }} 
             />
-            <Legend />
+            <Legend 
+              verticalAlign="top" 
+              height={36}
+              wrapperStyle={{color: 'rgba(255,255,255,0.8)', fontSize: '13px'}}
+            />
             {series.map((s, idx) => (
               <Bar 
                 key={s.key} 
@@ -355,34 +368,39 @@ function DataGraph({ graphContent }: { graphContent: string }) {
         );
       case 'scatter':
         return (
-          <ScatterChart>
+          <ScatterChart margin={{ top: 5, right: 30, left: 20, bottom: xAxis?.label ? 50 : 20 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
             <XAxis 
               type="number" 
               dataKey="x" 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
               name={xAxis?.label} 
-              label={xAxis?.label ? {value: xAxis.label, position: 'bottom', fill: 'rgba(255,255,255,0.6)', dy: 10} : undefined}
+              label={xAxis?.label ? {value: xAxis.label, position: 'insideBottom', fill: 'rgba(255,255,255,0.6)', dy: 35, fontSize: 12} : undefined}
             />
             <YAxis 
               type="number" 
               dataKey="y" 
               stroke="rgba(255,255,255,0.6)" 
-              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              tick={{fill: 'rgba(255,255,255,0.8)', fontSize: 12}} 
               name={yAxis?.label} 
-              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)'} : undefined}
+              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)', dx: -10, fontSize: 12} : undefined}
             />
             <Tooltip 
               contentStyle={{
-                background: 'rgba(0,0,0,0.8)', 
+                background: 'rgba(0,0,0,0.9)', 
                 border: '1px solid rgba(255,255,255,0.2)', 
                 borderRadius: '8px',
-                color: 'rgba(255,255,255,0.9)'
+                color: 'rgba(255,255,255,0.9)',
+                fontSize: '13px'
               }} 
               cursor={{strokeDasharray: '3 3'}} 
             />
-            <Legend />
+            <Legend 
+              verticalAlign="top" 
+              height={36}
+              wrapperStyle={{color: 'rgba(255,255,255,0.8)', fontSize: '13px'}}
+            />
             {series.map((s, idx) => (
               <Scatter 
                 key={s.key} 
@@ -401,7 +419,7 @@ function DataGraph({ graphContent }: { graphContent: string }) {
   return (
     <div className={styles.graphContainer}>
       {title && <div className={styles.graphTitle}>{title}</div>}
-      <ResponsiveContainer width="100%" height={300}>
+      <ResponsiveContainer width="100%" height={350}>
         {renderChart()}
       </ResponsiveContainer>
     </div>
