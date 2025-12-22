@@ -37,7 +37,7 @@ interface SearchStatusProps {
   textPreview?: string;  // Text preview for ticker animation
 }
 
-export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSkipSearch, textPreview }: SearchStatusProps) {
+export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSkipSearch, textPreview, status }: SearchStatusProps) {
   const [expandedSearches, setExpandedSearches] = useState<Set<string>>(new Set());
 
   // Create unique key for each search using iteration and queryIndex
@@ -68,6 +68,10 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
 
   // Get text preview from the most recent search entry that has one
   const activeTextPreview = textPreview || searchHistory.find(s => s.textPreview)?.textPreview;
+  
+  // Show ticker during search phase: streaming, have text preview, and not yet generating response
+  const isGenerating = status?.icon === 'generating';
+  const showTicker = isStreaming && activeTextPreview && !isGenerating;
 
   return (
     <div className={styles.searchStatusContainer}>
@@ -82,11 +86,11 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
         </button>
       )}
       
-      {/* Text Ticker - shows parsed text flying through during active search */}
-      {hasActiveSearch && activeTextPreview && (
+      {/* Text Ticker - shows parsed text flying through during search phase */}
+      {showTicker && (
         <TextTicker 
           text={activeTextPreview} 
-          isActive={hasActiveSearch} 
+          isActive={true} 
         />
       )}
       
