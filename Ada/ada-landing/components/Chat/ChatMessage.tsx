@@ -478,6 +478,7 @@ export default function ChatMessage({ message, onSkipSearch }: ChatMessageProps)
           isStreaming={message.isStreaming || false}
           canSkip={message.currentStatus?.canSkip}
           onSkipSearch={onSkipSearch}
+          textPreview={message.searchHistory.find(s => s.textPreview)?.textPreview}
         />
       )}
       
