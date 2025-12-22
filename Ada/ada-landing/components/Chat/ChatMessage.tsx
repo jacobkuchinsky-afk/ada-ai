@@ -194,11 +194,24 @@ export default function ChatMessage({ message, onSkipSearch }: ChatMessageProps)
       
       {/* Show search status for assistant messages */}
       {!isUser && message.searchHistory && message.searchHistory.length > 0 && (
-        <SearchStatus 
-          searchHistory={message.searchHistory} 
-          status={message.currentStatus}
-          isStreaming={message.isStreaming || false}
-        />
+        <div className={styles.searchWithSkip}>
+          <SearchStatus 
+            searchHistory={message.searchHistory} 
+            status={message.currentStatus}
+            isStreaming={message.isStreaming || false}
+          />
+          {/* Skip button in search area - more prominent */}
+          {showSkipButton && onSkipSearch && (
+            <button 
+              className={styles.skipSearchButtonProminent}
+              onClick={onSkipSearch}
+              type="button"
+            >
+              <span className={styles.skipSearchIcon}>⏭</span>
+              Skip Searching & Generate Now
+            </button>
+          )}
+        </div>
       )}
       
       {/* Show current status while processing (before content arrives) */}
