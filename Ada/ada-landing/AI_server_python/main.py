@@ -2,6 +2,8 @@ import os
 import json
 import re
 import gc
+import threading
+import uuid
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from datetime import date
@@ -9,6 +11,38 @@ from dotenv import load_dotenv
 from openai import OpenAI
 import grabbers
 import concurrent.futures
+
+
+# Thread-safe dict to track skip search requests by session_id
+_skip_search_requests = {}
+_skip_search_lock = threading.Lock()
+
+
+def request_skip_search(session_id: str) -> bool:
+    """Mark a session as requesting to skip search. Returns True if session was found."""
+    with _skip_search_lock:
+        if session_id in _skip_search_requests:
+            _skip_search_requests[session_id] = True
+            return True
+        return False
+
+
+def check_skip_search(session_id: str) -> bool:
+    """Check if a session has requested to skip search."""
+    with _skip_search_lock:
+        return _skip_search_requests.get(session_id, False)
+
+
+def register_session(session_id: str):
+    """Register a new session for skip tracking."""
+    with _skip_search_lock:
+        _skip_search_requests[session_id] = False
+
+
+def cleanup_session(session_id: str):
+    """Clean up session from skip tracking."""
+    with _skip_search_lock:
+        _skip_search_requests.pop(session_id, None)
 
 
 def clean_ai_output(text):
@@ -339,7 +373,7 @@ def compress_memory(memory: list) -> list:
     return new_memory
 
 
-def process_search(prompt, memory, previous_search_data=None, previous_user_question=None):
+def process_search(prompt, memory, previous_search_data=None, previous_user_question=None, session_id=None):
     """Process the search workflow and yield status updates and final streaming response.
     
     Args:
@@ -347,6 +381,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         memory: Conversation history as list of {role, content} dicts
         previous_search_data: Raw search data from previous message (for summarization)
         previous_user_question: The user question from previous message (for summarization context)
+        session_id: Unique session ID for skip search tracking
     """
     search_data = []
     search_history = []  # Track all searches for frontend
@@ -529,13 +564,36 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             break
         
-        # Step 3: Evaluate results
+        # Check if user requested to skip search BEFORE evaluation
+        if session_id and check_skip_search(session_id):
+            searching = False
+            yield {
+                "type": "status",
+                "message": "Search skipped by user, generating response...",
+                "step": 3,
+                "icon": "thinking"
+            }
+            break
+        
+        # Step 3: Evaluate results - show evaluating status with skip option available
         yield {
             "type": "status", 
             "message": "Evaluating search results...", 
             "step": 3, 
-            "icon": "evaluating"
+            "icon": "evaluating",
+            "canSkip": True  # Signal to frontend that skip is available
         }
+        
+        # Check again after yielding (user may have clicked skip while status was shown)
+        if session_id and check_skip_search(session_id):
+            searching = False
+            yield {
+                "type": "status",
+                "message": "Search skipped by user, generating response...",
+                "step": 3,
+                "icon": "thinking"
+            }
+            break
         
         # Combine search data for evaluation
         eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
@@ -546,6 +604,17 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         # Clean AI output to remove thinking tags
         good = clean_ai_output(good)
+        
+        # Check for skip request after evaluation AI call (it may take a while)
+        if session_id and check_skip_search(session_id):
+            searching = False
+            yield {
+                "type": "status",
+                "message": "Search skipped by user, generating response...",
+                "step": 3,
+                "icon": "thinking"
+            }
+            break
         
         # Check for exact markers
         if "<<<NEEDS_MORE_SEARCH>>>" in good:
@@ -630,6 +699,7 @@ def chat():
     memory = data.get('memory', [])
     previous_search_data = data.get('previousSearchData', None)  # Raw search data from last message
     previous_user_question = data.get('previousUserQuestion', None)  # User question from last message
+    session_id = data.get('sessionId', None)  # Session ID for skip search tracking
     
     if not message:
         return Response(
@@ -638,12 +708,25 @@ def chat():
             mimetype='application/json'
         )
     
+    # Generate session_id if not provided
+    if not session_id:
+        session_id = str(uuid.uuid4())
+    
+    # Register session for skip tracking
+    register_session(session_id)
+    
     def generate():
         try:
-            for update in process_search(message, memory, previous_search_data, previous_user_question):
+            # Send session_id to frontend first so they can use it for skip requests
+            yield f"data: {json.dumps({'type': 'session', 'sessionId': session_id})}\n\n"
+            
+            for update in process_search(message, memory, previous_search_data, previous_user_question, session_id):
                 yield f"data: {json.dumps(update)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+        finally:
+            # Clean up session after request completes
+            cleanup_session(session_id)
     
     return Response(
         stream_with_context(generate()),
@@ -653,6 +736,28 @@ def chat():
             'Connection': 'keep-alive',
             'X-Accel-Buffering': 'no'
         }
+    )
+
+
+@app.route('/api/skip-search', methods=['POST'])
+def skip_search():
+    """Endpoint to signal that the user wants to skip searching and go straight to generation."""
+    data = request.json
+    session_id = data.get('sessionId', '')
+    
+    if not session_id:
+        return Response(
+            json.dumps({"error": "No sessionId provided"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    success = request_skip_search(session_id)
+    
+    return Response(
+        json.dumps({"success": success, "sessionId": session_id}),
+        status=200,
+        mimetype='application/json'
     )
 
 

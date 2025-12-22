@@ -10,9 +10,10 @@ interface ChatInterfaceProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   statusMessage?: string;
+  onSkipSearch?: () => void;  // Callback to skip searching and go to generation
 }
 
-export default function ChatInterface({ messages, onSendMessage, isLoading, statusMessage }: ChatInterfaceProps) {
+export default function ChatInterface({ messages, onSendMessage, isLoading, statusMessage, onSkipSearch }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -43,7 +44,11 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, stat
       <div className={styles.messagesContainer}>
         <div className={styles.messagesList}>
           {messages.map((message) => (
-            <ChatMessage key={message.id} message={message} />
+            <ChatMessage 
+              key={message.id} 
+              message={message} 
+              onSkipSearch={message.isStreaming ? onSkipSearch : undefined}
+            />
           ))}
           <div ref={messagesEndRef} />
         </div>

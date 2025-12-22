@@ -172,10 +172,17 @@ function RenderContent({ content, isStreaming }: { content: string; isStreaming:
 
 interface ChatMessageProps {
   message: Message;
+  onSkipSearch?: () => void;  // Callback to skip searching and go to generation
 }
 
-export default function ChatMessage({ message }: ChatMessageProps) {
+export default function ChatMessage({ message, onSkipSearch }: ChatMessageProps) {
   const isUser = message.role === 'user';
+  
+  // Check if skip search button should be shown (during evaluation phase)
+  const showSkipButton = !isUser && 
+    message.currentStatus?.canSkip && 
+    message.isStreaming && 
+    !message.content;
 
   return (
     <div className={`${styles.message} ${isUser ? styles.userMessage : styles.assistantMessage}`}>
@@ -199,6 +206,17 @@ export default function ChatMessage({ message }: ChatMessageProps) {
         <div className={styles.statusIndicator}>
           <span className={styles.statusDot}></span>
           <span className={styles.statusText}>{message.currentStatus.message}</span>
+          {/* Skip Search Button - appears during evaluation */}
+          {showSkipButton && onSkipSearch && (
+            <button 
+              className={styles.skipSearchButton}
+              onClick={onSkipSearch}
+              type="button"
+            >
+              <span className={styles.skipSearchIcon}>⏭</span>
+              Skip & Generate
+            </button>
+          )}
         </div>
       )}
       

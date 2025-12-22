@@ -29,6 +29,7 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const abortControllerRef = useRef<AbortController | null>(null);
+  const sessionIdRef = useRef<string | null>(null);  // Track current session ID for skip search
 
   // Chat persistence state
   const [chats, setChats] = useState<ChatPreview[]>([]);
@@ -164,6 +165,7 @@ export default function DashboardPage() {
     setCurrentChatId(null);
     setStatusMessage('');
     setIsLoading(false);
+    sessionIdRef.current = null;  // Clear session ID
   }, []);
 
   const handleSelectChat = useCallback(
@@ -349,17 +351,21 @@ export default function DashboardPage() {
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
 
-          for (const line of lines) {
+              for (const line of lines) {
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6));
 
-                if (data.type === 'status') {
-                  // Update status with step and icon
+                if (data.type === 'session') {
+                  // Store session ID for skip search functionality
+                  sessionIdRef.current = data.sessionId;
+                } else if (data.type === 'status') {
+                  // Update status with step, icon, and canSkip flag
                   const statusInfo: StatusInfo = {
                     message: data.message,
                     step: data.step,
                     icon: data.icon,
+                    canSkip: data.canSkip || false,  // Include skip availability
                   };
                   setStatusMessage(data.message);
                   
@@ -481,6 +487,9 @@ export default function DashboardPage() {
                     accumulatedContent: '',
                     searchHistory: []
                   };
+                  
+                  // Clear session ID
+                  sessionIdRef.current = null;
 
                   // Deduct credit for response (non-blocking)
                   try {
@@ -616,6 +625,31 @@ export default function DashboardPage() {
     [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits]
   );
 
+  // Handle skip search - tells the backend to stop searching and generate response
+  const handleSkipSearch = useCallback(async () => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId) {
+      console.warn('No session ID available for skip search');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/skip-search`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ sessionId }),
+      });
+
+      if (!response.ok) {
+        console.error('Failed to skip search:', response.status);
+      }
+    } catch (error) {
+      console.error('Error skipping search:', error);
+    }
+  }, []);
+
   if (loading) {
     return (
       <main className={styles.main}>
@@ -646,6 +680,7 @@ export default function DashboardPage() {
         onSendMessage={handleSendMessage}
         isLoading={isLoading}
         statusMessage={statusMessage}
+        onSkipSearch={handleSkipSearch}
       />
       <OutOfCreditsModal
         isOpen={showOutOfCreditsModal}
