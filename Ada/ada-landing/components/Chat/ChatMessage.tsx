@@ -3,6 +3,10 @@
 import styles from './Chat.module.css';
 import SearchStatus, { SearchEntry, StatusInfo } from './SearchStatus';
 import ReactMarkdown from 'react-markdown';
+import {
+  LineChart, Line, BarChart, Bar, ScatterChart, Scatter,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 
 export interface Message {
   id: string;
@@ -17,8 +21,18 @@ export interface Message {
 
 // Table parsing types
 interface ContentSegment {
-  type: 'text' | 'table' | 'table-loading';
+  type: 'text' | 'table' | 'table-loading' | 'graph' | 'graph-loading';
   content: string;
+}
+
+// Graph parsing types
+interface GraphData {
+  type: 'line' | 'bar' | 'scatter';
+  title?: string;
+  xAxis?: { label?: string; type?: 'category' | 'number' };
+  yAxis?: { label?: string };
+  data: Array<Record<string, string | number>>;
+  series: Array<{ key: string; name: string }>;
 }
 
 interface ParsedTable {
@@ -39,55 +53,106 @@ function parseTableData(tableContent: string): ParsedTable | null {
   return { headers, rows };
 }
 
-// Parse content for §TABLE§ markers and return segments
-function parseContentWithTables(content: string, isStreaming: boolean): ContentSegment[] {
+// Parse JSON graph data into structured format
+function parseGraphData(graphContent: string): GraphData | null {
+  try {
+    const parsed = JSON.parse(graphContent.trim());
+    if (!parsed.data || !Array.isArray(parsed.data)) return null;
+    if (!parsed.series || !Array.isArray(parsed.series)) return null;
+    return parsed as GraphData;
+  } catch {
+    return null;
+  }
+}
+
+// Parse content for §TABLE§ and §GRAPH§ markers and return segments
+function parseContentSegments(content: string, isStreaming: boolean): ContentSegment[] {
   const segments: ContentSegment[] = [];
   const tableStartMarker = '§TABLE§';
   const tableEndMarker = '§/TABLE§';
+  const graphStartMarker = '§GRAPH§';
+  const graphEndMarker = '§/GRAPH§';
   
   let remaining = content;
   
   while (remaining.length > 0) {
-    const startIdx = remaining.indexOf(tableStartMarker);
+    // Find the next marker (table or graph)
+    const tableStartIdx = remaining.indexOf(tableStartMarker);
+    const graphStartIdx = remaining.indexOf(graphStartMarker);
     
-    if (startIdx === -1) {
-      // No more tables, add remaining text
+    // Determine which marker comes first (or if none exist)
+    let nextMarkerType: 'table' | 'graph' | null = null;
+    let nextMarkerIdx = -1;
+    
+    if (tableStartIdx === -1 && graphStartIdx === -1) {
+      // No more markers, add remaining text
       if (remaining.trim()) {
         segments.push({ type: 'text', content: remaining });
       }
       break;
+    } else if (tableStartIdx === -1) {
+      nextMarkerType = 'graph';
+      nextMarkerIdx = graphStartIdx;
+    } else if (graphStartIdx === -1) {
+      nextMarkerType = 'table';
+      nextMarkerIdx = tableStartIdx;
+    } else {
+      // Both exist, pick the one that comes first
+      if (tableStartIdx < graphStartIdx) {
+        nextMarkerType = 'table';
+        nextMarkerIdx = tableStartIdx;
+      } else {
+        nextMarkerType = 'graph';
+        nextMarkerIdx = graphStartIdx;
+      }
     }
     
-    // Add text before the table
-    if (startIdx > 0) {
-      const textBefore = remaining.substring(0, startIdx);
+    // Add text before the marker
+    if (nextMarkerIdx > 0) {
+      const textBefore = remaining.substring(0, nextMarkerIdx);
       if (textBefore.trim()) {
         segments.push({ type: 'text', content: textBefore });
       }
     }
     
-    // Find the end of the table
-    const afterStart = remaining.substring(startIdx + tableStartMarker.length);
-    const endIdx = afterStart.indexOf(tableEndMarker);
-    
-    if (endIdx === -1) {
-      // Table is not complete yet
-      if (isStreaming) {
-        // Show loading indicator while streaming
-        segments.push({ type: 'table-loading', content: afterStart });
-      } else {
-        // If not streaming but no end marker, show what we have as text
-        segments.push({ type: 'text', content: remaining.substring(startIdx) });
+    // Process the marker based on type
+    if (nextMarkerType === 'table') {
+      const afterStart = remaining.substring(nextMarkerIdx + tableStartMarker.length);
+      const endIdx = afterStart.indexOf(tableEndMarker);
+      
+      if (endIdx === -1) {
+        // Table is not complete yet
+        if (isStreaming) {
+          segments.push({ type: 'table-loading', content: afterStart });
+        } else {
+          segments.push({ type: 'text', content: remaining.substring(nextMarkerIdx) });
+        }
+        break;
       }
-      break;
+      
+      // Complete table found
+      const tableContent = afterStart.substring(0, endIdx);
+      segments.push({ type: 'table', content: tableContent });
+      remaining = afterStart.substring(endIdx + tableEndMarker.length);
+    } else if (nextMarkerType === 'graph') {
+      const afterStart = remaining.substring(nextMarkerIdx + graphStartMarker.length);
+      const endIdx = afterStart.indexOf(graphEndMarker);
+      
+      if (endIdx === -1) {
+        // Graph is not complete yet
+        if (isStreaming) {
+          segments.push({ type: 'graph-loading', content: afterStart });
+        } else {
+          segments.push({ type: 'text', content: remaining.substring(nextMarkerIdx) });
+        }
+        break;
+      }
+      
+      // Complete graph found
+      const graphContent = afterStart.substring(0, endIdx);
+      segments.push({ type: 'graph', content: graphContent });
+      remaining = afterStart.substring(endIdx + graphEndMarker.length);
     }
-    
-    // Complete table found
-    const tableContent = afterStart.substring(0, endIdx);
-    segments.push({ type: 'table', content: tableContent });
-    
-    // Continue with remaining content
-    remaining = afterStart.substring(endIdx + tableEndMarker.length);
   }
   
   return segments;
@@ -146,9 +211,167 @@ function DataTable({ tableContent }: { tableContent: string }) {
   );
 }
 
-// Render content segments (text, tables, loading states)
+// Graph loading component with dot animation
+function GraphLoading() {
+  return (
+    <div className={styles.graphLoading}>
+      <div className={styles.graphLoadingIcon}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 3v18h18" />
+          <path d="M18 9l-5 5-4-4-3 3" />
+        </svg>
+      </div>
+      <span className={styles.graphLoadingText}>Creating graph</span>
+      <span className={styles.graphLoadingDots}>
+        <span>.</span><span>.</span><span>.</span>
+      </span>
+    </div>
+  );
+}
+
+// Color palette for graph series
+const GRAPH_COLORS = ['#8b5cf6', '#ec4899', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+
+// Graph component for rendering charts
+function DataGraph({ graphContent }: { graphContent: string }) {
+  const graphData = parseGraphData(graphContent);
+  
+  if (!graphData || graphData.data.length === 0) {
+    return <div className={styles.graphError}>Unable to parse graph data</div>;
+  }
+  
+  const { type, title, xAxis, yAxis, data, series } = graphData;
+  
+  const renderChart = () => {
+    switch (type) {
+      case 'line':
+        return (
+          <LineChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis 
+              dataKey="x" 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              label={xAxis?.label ? {value: xAxis.label, position: 'bottom', fill: 'rgba(255,255,255,0.6)', dy: 10} : undefined} 
+            />
+            <YAxis 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)'} : undefined} 
+            />
+            <Tooltip 
+              contentStyle={{
+                background: 'rgba(0,0,0,0.8)', 
+                border: '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '8px',
+                color: 'rgba(255,255,255,0.9)'
+              }} 
+            />
+            <Legend />
+            {series.map((s, idx) => (
+              <Line 
+                key={s.key} 
+                type="monotone" 
+                dataKey={s.key} 
+                name={s.name} 
+                stroke={GRAPH_COLORS[idx % GRAPH_COLORS.length]} 
+                strokeWidth={2} 
+                dot={{fill: GRAPH_COLORS[idx % GRAPH_COLORS.length]}} 
+              />
+            ))}
+          </LineChart>
+        );
+      case 'bar':
+        return (
+          <BarChart data={data}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis 
+              dataKey="x" 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+            />
+            <YAxis 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+            />
+            <Tooltip 
+              contentStyle={{
+                background: 'rgba(0,0,0,0.8)', 
+                border: '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '8px',
+                color: 'rgba(255,255,255,0.9)'
+              }} 
+            />
+            <Legend />
+            {series.map((s, idx) => (
+              <Bar 
+                key={s.key} 
+                dataKey={s.key} 
+                name={s.name} 
+                fill={GRAPH_COLORS[idx % GRAPH_COLORS.length]} 
+                radius={[4, 4, 0, 0]} 
+              />
+            ))}
+          </BarChart>
+        );
+      case 'scatter':
+        return (
+          <ScatterChart>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+            <XAxis 
+              type="number" 
+              dataKey="x" 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              name={xAxis?.label} 
+              label={xAxis?.label ? {value: xAxis.label, position: 'bottom', fill: 'rgba(255,255,255,0.6)', dy: 10} : undefined}
+            />
+            <YAxis 
+              type="number" 
+              dataKey="y" 
+              stroke="rgba(255,255,255,0.6)" 
+              tick={{fill: 'rgba(255,255,255,0.8)'}} 
+              name={yAxis?.label} 
+              label={yAxis?.label ? {value: yAxis.label, angle: -90, position: 'insideLeft', fill: 'rgba(255,255,255,0.6)'} : undefined}
+            />
+            <Tooltip 
+              contentStyle={{
+                background: 'rgba(0,0,0,0.8)', 
+                border: '1px solid rgba(255,255,255,0.2)', 
+                borderRadius: '8px',
+                color: 'rgba(255,255,255,0.9)'
+              }} 
+              cursor={{strokeDasharray: '3 3'}} 
+            />
+            <Legend />
+            {series.map((s, idx) => (
+              <Scatter 
+                key={s.key} 
+                name={s.name} 
+                data={data} 
+                fill={GRAPH_COLORS[idx % GRAPH_COLORS.length]} 
+              />
+            ))}
+          </ScatterChart>
+        );
+      default:
+        return <div className={styles.graphError}>Unknown graph type: {type}</div>;
+    }
+  };
+  
+  return (
+    <div className={styles.graphContainer}>
+      {title && <div className={styles.graphTitle}>{title}</div>}
+      <ResponsiveContainer width="100%" height={300}>
+        {renderChart()}
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+// Render content segments (text, tables, graphs, loading states)
 function RenderContent({ content, isStreaming }: { content: string; isStreaming: boolean }) {
-  const segments = parseContentWithTables(content, isStreaming);
+  const segments = parseContentSegments(content, isStreaming);
   
   return (
     <>
@@ -162,6 +385,10 @@ function RenderContent({ content, isStreaming }: { content: string; isStreaming:
             return <DataTable key={idx} tableContent={segment.content} />;
           case 'table-loading':
             return <TableLoading key={idx} />;
+          case 'graph':
+            return <DataGraph key={idx} graphContent={segment.content} />;
+          case 'graph-loading':
+            return <GraphLoading key={idx} />;
           default:
             return null;
         }

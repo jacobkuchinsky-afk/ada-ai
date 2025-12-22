@@ -133,6 +133,36 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Use tables for: comparisons, specifications, pricing, statistics, feature lists, timelines
                 - Do NOT use markdown tables with dashes (---), always use §TABLE§ format
                 - IMPORTANT: Use exactly §TABLE§ to start and §/TABLE§ to end (with the § symbol)
+                
+                GRAPHS: When presenting numerical data, trends, comparisons, or relationships that would benefit from visual representation, use the special graph syntax:
+                §GRAPH§
+                {
+                  "type": "line|bar|scatter",
+                  "title": "Chart Title (optional)",
+                  "xAxis": {"label": "X Axis Label", "type": "category|number"},
+                  "yAxis": {"label": "Y Axis Label"},
+                  "data": [
+                    {"x": "Label1", "series1": 100, "series2": 150},
+                    {"x": "Label2", "series1": 120, "series2": 170}
+                  ],
+                  "series": [
+                    {"key": "series1", "name": "Display Name 1"},
+                    {"key": "series2", "name": "Display Name 2"}
+                  ]
+                }
+                §/GRAPH§
+                Graph type guidelines:
+                - "line": Use for trends over time, continuous data, multiple series comparisons
+                - "bar": Use for categorical comparisons, discrete values, rankings
+                - "scatter": Use for showing relationships between two variables, non-linear data, correlations
+                Graph rules:
+                - Use valid JSON inside the markers
+                - "data" array contains objects where "x" is the x-axis value
+                - "series" defines each line/bar series with a "key" (matching data keys) and "name" (display label)
+                - For scatter plots, use numeric x values and include y key: {"x": 10, "y": 25}
+                - Support up to 6 series per graph
+                - Do NOT use markdown code blocks for graphs, always use §GRAPH§ format
+                - IMPORTANT: Use exactly §GRAPH§ to start and §/GRAPH§ to end (with the § symbol)
                 """
 
 search_prompt = f"""You are an expert at converting questions into effective web search queries.
