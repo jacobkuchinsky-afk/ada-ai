@@ -163,6 +163,17 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Support up to 6 series per graph
                 - Do NOT use markdown code blocks for graphs, always use §GRAPH§ format
                 - IMPORTANT: Use exactly §GRAPH§ to start and §/GRAPH§ to end (with the § symbol)
+                
+                IMAGES: You may be provided with a list of available images from the scraped sources. When an image would enhance your response or help illustrate a point, reference it using the special image syntax:
+                §IMG:https://example.com/image.jpg§
+                Image rules:
+                - ONLY use image URLs from the "Available Images" list provided - NEVER make up or guess image URLs
+                - Place images inline where they are most relevant to the surrounding text
+                - Use images sparingly - only when they add real value to the explanation
+                - Add a brief description before or after the image to explain what it shows
+                - Do NOT use markdown image syntax ![alt](url), always use §IMG:url§ format
+                - IMPORTANT: Use exactly §IMG: to start and § to end (with the § symbol)
+                - Example: "Here's what the product looks like: §IMG:https://example.com/product.jpg§"
                 """
 
 search_prompt = f"""You are an expert at converting questions into effective web search queries.
@@ -415,6 +426,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
     """
     search_data = []
     search_history = []  # Track all searches for frontend
+    all_images = []  # Collect images from all search results
     iter_count = 0
     searching = True
     no_search = False
@@ -585,7 +597,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
                             }
                 except Exception as e:
                     print(f"Error searching query '{q}': {e}")
-                    search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}', 'service_available': False})
+                    search_results[idx] = (q, {'sources': [], 'full_text': f'Search failed: {str(e)}', 'images': [], 'service_available': False})
         
         # Check if search service is down (all queries failed with service_available=False)
         service_unavailable_count = sum(
@@ -602,8 +614,10 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             q, scrape_result = search_results[idx]
             sources = scrape_result.get('sources', [])
             full_text = scrape_result.get('full_text', '')
+            images = scrape_result.get('images', [])
             
             search_data.append(full_text)
+            all_images.extend(images)  # Collect images from all results
             
             # Create search entry for history
             search_entry = {
@@ -741,6 +755,16 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         prompt_text = "User question: " + prompt + "\n\nSearch data: " + combined_search_data + "\n\nNo data has been given just answer the users question truthfully"
     else:
         prompt_text = "User question: " + prompt + "\n\nSearch data:\n" + combined_search_data
+    
+    # Add available images to the prompt if any were found
+    if all_images:
+        # Limit to 25 images max to avoid overwhelming the AI
+        available_images = all_images[:25]
+        images_text = "\n\nAvailable Images (use §IMG:url§ to reference):\n"
+        for i, img in enumerate(available_images, 1):
+            alt_text = f" - {img['alt']}" if img.get('alt') else ""
+            images_text += f"{i}. {img['url']}{alt_text}\n"
+        prompt_text += images_text
     
     # Build instructions with memory and research summary
     instructions = main_prompt + " Memory from previous conversation: " + str(memory)
