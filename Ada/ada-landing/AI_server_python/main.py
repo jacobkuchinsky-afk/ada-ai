@@ -190,7 +190,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - The second query should attack the query from a different angle so if the first query doesnt give any quality results then the second query will be a fallback because it is from a different viewpoint.
                     - The third query should ask questions that arent full answersing the users quetion but getting background details and other useful information that might help support the answer
                     - The fourth query should be used as anther specific query aimed to gather information of somehting very specific to the users question. 
-                    - At the end please add depth<number> to the query to indicate how many sources to search for.
+                    - At the end of each search query please add depth<number> to the query to indicate how many sources to search for.
                     - The depth number should be 10 or under
                     - For simple searches the number should be small
                     Exceptions:
@@ -525,30 +525,40 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         query = query.replace('"', "").strip()
         
-        # Extract depth from query if present (format: depth<number> at the end)
-        depth = 5  # Default depth
-        depth_parts = query.split("depth")
-        if len(depth_parts) > 1:
-            # Get the number after "depth"
-            depth_str = depth_parts[-1].strip()
-            # Extract just the digits
-            depth_digits = ''.join(c for c in depth_str if c.isdigit())
-            if depth_digits:
-                extracted_depth = int(depth_digits)
-                depth = min(max(extracted_depth, 1), 10)  # Clamp between 1 and 10
-            # Remove depth from query (rejoin without the last depth part)
-            query = "depth".join(depth_parts[:-1]).strip().rstrip("~").strip()
+        # Split queries by ~ first
+        raw_queries = [q.strip() for q in query.split("~") if q.strip()]
         
-        # Split queries by ~ and search in parallel
-        queries = [q.strip() for q in query.split("~") if q.strip()]
+        # Extract depth from each query (format: "query text depth<number>")
+        # Store as list of tuples: (query_text, depth)
+        queries_with_depth = []
+        for q in raw_queries:
+            q = clean_ai_output(q)
+            if not q or len(q) <= 2:
+                continue
+            
+            # Extract depth from this query
+            query_depth = 5  # Default depth per query
+            depth_parts = q.split("depth")
+            if len(depth_parts) > 1:
+                # Get the number after "depth"
+                depth_str = depth_parts[-1].strip()
+                # Extract just the digits
+                depth_digits = ''.join(c for c in depth_str if c.isdigit())
+                if depth_digits:
+                    extracted_depth = int(depth_digits)
+                    query_depth = min(max(extracted_depth, 1), 10)  # Clamp between 1 and 10
+                # Remove depth from query text
+                q = "depth".join(depth_parts[:-1]).strip()
+            
+            if q and len(q) > 2:
+                queries_with_depth.append((q, query_depth))
         
-        # Clean each individual query too
-        queries = [clean_ai_output(q) for q in queries]
-        queries = [q for q in queries if q and len(q) > 2]  # Remove empty or tiny queries
+        # If no valid queries after processing, use original with default depth
+        if not queries_with_depth:
+            queries_with_depth = [(query, 5)]
         
-        # If no valid queries after split, use original
-        if not queries:
-            queries = [query]
+        # Extract just queries for display/iteration (depths used in search function)
+        queries = [q for q, _ in queries_with_depth]
         
         # Check for skip before starting searches (only if in goodness loop)
         if in_goodness_loop and session_id and check_skip_search(session_id):
@@ -582,7 +592,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
         
         # Search all queries in parallel using ThreadPoolExecutor
-        def search_single_query(q):
+        def search_single_query(q, depth):
             return grabbers.search_and_scrape(q, depth)
         
         # Store results with their query index for ordering
@@ -590,7 +600,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         text_preview_sent = False  # Track if we've sent a text preview yet
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(queries)) as executor:
-            future_to_query = {executor.submit(search_single_query, q): (idx, q) for idx, q in enumerate(queries)}
+            future_to_query = {executor.submit(search_single_query, q, d): (idx, q) for idx, (q, d) in enumerate(queries_with_depth)}
             
             for future in concurrent.futures.as_completed(future_to_query):
                 idx, q = future_to_query[future]
