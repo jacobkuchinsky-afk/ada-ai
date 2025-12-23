@@ -325,6 +325,7 @@ export default function DashboardPage() {
           headers: {
             'Content-Type': 'application/json',
             'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
+            'ngrok-skip-browser-warning': 'true', // Bypass ngrok interstitial page
           },
           body: JSON.stringify({
             message: content,
@@ -688,6 +689,7 @@ export default function DashboardPage() {
         headers: {
           'Content-Type': 'application/json',
           'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
+          'ngrok-skip-browser-warning': 'true', // Bypass ngrok interstitial page
         },
         body: JSON.stringify({ sessionId }),
       });
