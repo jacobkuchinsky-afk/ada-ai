@@ -190,6 +190,9 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - The second query should attack the query from a different angle so if the first query doesnt give any quality results then the second query will be a fallback because it is from a different viewpoint.
                     - The third query should ask questions that arent full answersing the users quetion but getting background details and other useful information that might help support the answer
                     - The fourth query should be used as anther specific query aimed to gather information of somehting very specific to the users question. 
+                    - At the end please add depth<number> to the query to indicate how many sources to search for.
+                    - The depth number should be 10 or under
+                    - For simple searches the number should be small
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
@@ -522,6 +525,20 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         
         query = query.replace('"', "").strip()
         
+        # Extract depth from query if present (format: depth<number> at the end)
+        depth = 5  # Default depth
+        depth_parts = query.split("depth")
+        if len(depth_parts) > 1:
+            # Get the number after "depth"
+            depth_str = depth_parts[-1].strip()
+            # Extract just the digits
+            depth_digits = ''.join(c for c in depth_str if c.isdigit())
+            if depth_digits:
+                extracted_depth = int(depth_digits)
+                depth = min(max(extracted_depth, 1), 10)  # Clamp between 1 and 10
+            # Remove depth from query (rejoin without the last depth part)
+            query = "depth".join(depth_parts[:-1]).strip().rstrip("~").strip()
+        
         # Split queries by ~ and search in parallel
         queries = [q.strip() for q in query.split("~") if q.strip()]
         
@@ -532,8 +549,6 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         # If no valid queries after split, use original
         if not queries:
             queries = [query]
-        
-        depth = 5  # 5 sources per query (reduced from 8 to prevent memory issues)
         
         # Check for skip before starting searches (only if in goodness loop)
         if in_goodness_loop and session_id and check_skip_search(session_id):
