@@ -522,33 +522,27 @@
   gap: 6px;
 }
 
-/* Skip button - soft purple, no glow */
+/* Skip button - soft purple, compact, no animation */
 .skipSearchButtonInline {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 16px;
-  background: rgba(147, 112, 219, 0.12);
-  border: 1px solid rgba(147, 112, 219, 0.35);
-  border-radius: 20px;
-  color: rgba(200, 180, 230, 0.95);
+  gap: 5px;
+  padding: 6px 12px;
+  width: fit-content;
+  background: rgba(147, 112, 219, 0.1);
+  border: 1px solid rgba(147, 112, 219, 0.3);
+  border-radius: 16px;
+  color: rgba(190, 170, 220, 0.9);
   font-family: var(--font-ubuntu), sans-serif;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
   white-space: nowrap;
-  flex-shrink: 0;
 }
 
 .skipSearchButtonInline:hover {
-  background: rgba(147, 112, 219, 0.2);
-  border-color: rgba(147, 112, 219, 0.5);
-  color: rgba(220, 200, 245, 1);
-}
-
-.skipSearchButtonInline:active {
-  transform: scale(0.98);
+  background: rgba(147, 112, 219, 0.18);
+  border-color: rgba(147, 112, 219, 0.45);
 }
 
 /* Clickable Search Pill */
