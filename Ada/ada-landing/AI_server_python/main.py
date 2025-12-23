@@ -79,7 +79,11 @@ app = Flask(__name__)
 
 # CORS configuration - allow all origins for the API
 # This is safe because we don't use cookies/sessions for auth
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+CORS(app, resources={r"/api/*": {
+    "origins": "*",
+    "allow_headers": ["Content-Type", "ngrok-skip-browser-warning", "bypass-tunnel-reminder"],
+    "methods": ["GET", "POST", "OPTIONS"]
+}})
 
 current_date = date.today()
 
