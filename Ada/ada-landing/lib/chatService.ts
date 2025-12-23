@@ -45,6 +45,29 @@ function toDate(timestamp: Timestamp | Date | undefined): Date {
   return timestamp;
 }
 
+// Helper to recursively remove undefined values from objects (Firestore rejects undefined)
+function removeUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => removeUndefined(item)) as T;
+  }
+  
+  if (typeof obj === 'object') {
+    const cleaned: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        cleaned[key] = removeUndefined(value);
+      }
+    }
+    return cleaned as T;
+  }
+  
+  return obj;
+}
+
 /**
  * Create a new chat with the first message as the title
  */
@@ -109,10 +132,11 @@ export async function updateChat(
     serializedMessages = messages.map((msg) => {
       // Build base message object - Firestore doesn't accept undefined values
       const serialized: Record<string, unknown> = {
-        id: msg.id,
-        role: msg.role,
+        id: msg.id || '',
+        role: msg.role || 'user',
         content: msg.content || '',  // Ensure content is never undefined
-        searchHistory: msg.searchHistory || [],
+        // Clean searchHistory to remove any undefined values in nested objects
+        searchHistory: removeUndefined(msg.searchHistory || []),
       };
       
       // Only include rawSearchData if it has a value (Firestore rejects undefined)
