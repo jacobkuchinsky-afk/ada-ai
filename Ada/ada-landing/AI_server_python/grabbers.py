@@ -2,7 +2,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, urljoin
+import re
 
 # Try to use ddgs package (more reliable than HTML scraping)
 try:
@@ -139,6 +140,102 @@ def extract_main_content(soup):
     return ' '.join(text.split())[:8000]
 
 
+def extract_images(soup, page_url, max_images=5):
+    """
+    Extract relevant images from a page with smart filtering.
+    
+    Filters out:
+    - Images smaller than 50x50px (icons)
+    - Data URIs
+    - Common icon/logo patterns
+    - Social media sharing icons
+    
+    Args:
+        soup: BeautifulSoup object of the page
+        page_url: URL of the page (for resolving relative URLs)
+        max_images: Maximum number of images to extract (default 5)
+    
+    Returns:
+        List of dicts with 'url', 'alt', 'source_page' keys
+    """
+    images = []
+    seen_urls = set()
+    
+    # Patterns to skip (icons, logos, social media, etc.)
+    skip_patterns = [
+        r'favicon', r'logo', r'icon', r'sprite', r'avatar',
+        r'facebook', r'twitter', r'linkedin', r'instagram', r'pinterest',
+        r'youtube', r'tiktok', r'whatsapp', r'telegram', r'reddit',
+        r'share', r'social', r'button', r'badge', r'emoji',
+        r'loading', r'spinner', r'placeholder', r'blank',
+        r'pixel', r'tracking', r'analytics', r'ad[-_]?', r'banner[-_]?ad',
+        r'1x1', r'spacer', r'transparent', r'arrow', r'chevron',
+        r'close', r'menu', r'hamburger', r'search[-_]?icon',
+        r'\.gif$',  # Skip most GIFs (usually animations/icons)
+    ]
+    skip_regex = re.compile('|'.join(skip_patterns), re.IGNORECASE)
+    
+    # Find all img tags
+    for img in soup.find_all('img'):
+        if len(images) >= max_images:
+            break
+            
+        # Get src attribute (try multiple common attributes)
+        src = img.get('src') or img.get('data-src') or img.get('data-lazy-src')
+        if not src:
+            continue
+        
+        # Skip data URIs
+        if src.startswith('data:'):
+            continue
+        
+        # Convert relative URLs to absolute
+        if not src.startswith(('http://', 'https://')):
+            src = urljoin(page_url, src)
+        
+        # Skip if we've already seen this URL
+        if src in seen_urls:
+            continue
+        seen_urls.add(src)
+        
+        # Skip if URL matches skip patterns
+        if skip_regex.search(src):
+            continue
+        
+        # Check for small dimensions in attributes
+        width = img.get('width', '')
+        height = img.get('height', '')
+        try:
+            w = int(str(width).replace('px', '').strip()) if width else 999
+            h = int(str(height).replace('px', '').strip()) if height else 999
+            if w < 50 or h < 50:
+                continue
+        except (ValueError, TypeError):
+            pass  # Can't parse dimensions, allow through
+        
+        # Check class/id for skip patterns
+        img_class = ' '.join(img.get('class', []))
+        img_id = img.get('id', '')
+        if skip_regex.search(img_class) or skip_regex.search(img_id):
+            continue
+        
+        # Get alt text
+        alt = img.get('alt', '').strip()
+        
+        # Skip if alt text indicates it's an icon/logo
+        if alt and skip_regex.search(alt):
+            continue
+        
+        # Add to results
+        images.append({
+            'url': src,
+            'alt': alt[:200] if alt else '',  # Limit alt text length
+            'source_page': page_url
+        })
+    
+    return images
+
+
 def search_ddgs(query, num_results):
     """
     Search using duckduckgo-search package (reliable API method).
@@ -190,20 +287,21 @@ def search_html_fallback(query, num_results, session):
 
 def search_and_scrape(search, result_number):
     """
-    Takes a search query and number of results, returns text data from those websites.
+    Takes a search query and number of results, returns text data and images from those websites.
     
     Parameters:
     search (str): The search query
     result_number (int): Number of websites to scrape
     
     Returns:
-    dict: Contains 'sources' list, 'full_text' combined content, 'count', and 'service_available'
+    dict: Contains 'sources' list, 'full_text' combined content, 'images' list, 'count', and 'service_available'
     """
     # Cap results at 5 to prevent memory issues
     result_number = min(result_number, 5)
     
     results = []
     sources = []
+    all_images = []  # Collect images from all pages
     links = []
     service_available = True
     
@@ -226,6 +324,7 @@ def search_and_scrape(search, result_number):
         return {
             'sources': [],
             'full_text': 'Search service temporarily unavailable',
+            'images': [],
             'count': 0,
             'service_available': False
         }
@@ -235,6 +334,7 @@ def search_and_scrape(search, result_number):
         return {
             'sources': [],
             'full_text': 'No search results found for this query',
+            'images': [],
             'count': 0,
             'service_available': True
         }
@@ -262,6 +362,10 @@ def search_and_scrape(search, result_number):
                 
                 # Use smart content extraction - gets clean content, removes junk
                 text = extract_main_content(page_soup)
+                
+                # Extract images from the page (before decomposing soup)
+                page_images = extract_images(page_soup, url, max_images=5)
+                all_images.extend(page_images)
                 
                 # Add source info
                 sources.append({
@@ -302,6 +406,7 @@ def search_and_scrape(search, result_number):
     return {
         'sources': sources,
         'full_text': full_text,
+        'images': all_images,
         'count': len(sources),
         'service_available': True
     }

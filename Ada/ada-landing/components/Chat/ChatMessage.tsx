@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import styles from './Chat.module.css';
 import SearchStatus, { SearchEntry, StatusInfo } from './SearchStatus';
 import ReactMarkdown from 'react-markdown';
@@ -22,7 +23,7 @@ export interface Message {
 
 // Table parsing types
 interface ContentSegment {
-  type: 'text' | 'table' | 'table-loading' | 'graph' | 'graph-loading';
+  type: 'text' | 'table' | 'table-loading' | 'graph' | 'graph-loading' | 'image' | 'image-loading';
   content: string;
 }
 
@@ -95,47 +96,49 @@ function parseGraphData(graphContent: string): GraphData | null {
   }
 }
 
-// Parse content for §TABLE§ and §GRAPH§ markers and return segments
+// Parse content for §TABLE§, §GRAPH§, and §IMG:url§ markers and return segments
 function parseContentSegments(content: string, isStreaming: boolean): ContentSegment[] {
   const segments: ContentSegment[] = [];
   const tableStartMarker = '§TABLE§';
   const tableEndMarker = '§/TABLE§';
   const graphStartMarker = '§GRAPH§';
   const graphEndMarker = '§/GRAPH§';
+  const imageStartMarker = '§IMG:';
+  const imageEndMarker = '§';
   
   let remaining = content;
   
   while (remaining.length > 0) {
-    // Find the next marker (table or graph)
+    // Find the next marker (table, graph, or image)
     const tableStartIdx = remaining.indexOf(tableStartMarker);
     const graphStartIdx = remaining.indexOf(graphStartMarker);
+    const imageStartIdx = remaining.indexOf(imageStartMarker);
     
     // Determine which marker comes first (or if none exist)
-    let nextMarkerType: 'table' | 'graph' | null = null;
+    let nextMarkerType: 'table' | 'graph' | 'image' | null = null;
     let nextMarkerIdx = -1;
     
-    if (tableStartIdx === -1 && graphStartIdx === -1) {
+    // Find the minimum positive index
+    const indices = [
+      { type: 'table' as const, idx: tableStartIdx },
+      { type: 'graph' as const, idx: graphStartIdx },
+      { type: 'image' as const, idx: imageStartIdx }
+    ].filter(item => item.idx !== -1);
+    
+    if (indices.length === 0) {
       // No more markers, add remaining text
       if (remaining.trim()) {
         segments.push({ type: 'text', content: remaining });
       }
       break;
-    } else if (tableStartIdx === -1) {
-      nextMarkerType = 'graph';
-      nextMarkerIdx = graphStartIdx;
-    } else if (graphStartIdx === -1) {
-      nextMarkerType = 'table';
-      nextMarkerIdx = tableStartIdx;
-    } else {
-      // Both exist, pick the one that comes first
-      if (tableStartIdx < graphStartIdx) {
-        nextMarkerType = 'table';
-        nextMarkerIdx = tableStartIdx;
-      } else {
-        nextMarkerType = 'graph';
-        nextMarkerIdx = graphStartIdx;
-      }
     }
+    
+    // Get the marker that appears first
+    const firstMarker = indices.reduce((min, curr) => 
+      curr.idx < min.idx ? curr : min
+    );
+    nextMarkerType = firstMarker.type;
+    nextMarkerIdx = firstMarker.idx;
     
     // Add text before the marker
     if (nextMarkerIdx > 0) {
@@ -182,6 +185,25 @@ function parseContentSegments(content: string, isStreaming: boolean): ContentSeg
       const graphContent = afterStart.substring(0, endIdx);
       segments.push({ type: 'graph', content: graphContent });
       remaining = afterStart.substring(endIdx + graphEndMarker.length);
+    } else if (nextMarkerType === 'image') {
+      const afterStart = remaining.substring(nextMarkerIdx + imageStartMarker.length);
+      // Find the closing § that ends the image URL
+      const endIdx = afterStart.indexOf(imageEndMarker);
+      
+      if (endIdx === -1) {
+        // Image marker is not complete yet
+        if (isStreaming) {
+          segments.push({ type: 'image-loading', content: afterStart });
+        } else {
+          segments.push({ type: 'text', content: remaining.substring(nextMarkerIdx) });
+        }
+        break;
+      }
+      
+      // Complete image found - content is the URL
+      const imageUrl = afterStart.substring(0, endIdx).trim();
+      segments.push({ type: 'image', content: imageUrl });
+      remaining = afterStart.substring(endIdx + imageEndMarker.length);
     }
   }
   
@@ -256,6 +278,103 @@ function GraphLoading() {
         <span>.</span><span>.</span><span>.</span>
       </span>
     </div>
+  );
+}
+
+// Image loading component with skeleton animation
+function ImageLoading() {
+  return (
+    <div className={styles.imageLoading}>
+      <div className={styles.imageLoadingIcon}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </div>
+      <span className={styles.imageLoadingText}>Loading image</span>
+      <span className={styles.imageLoadingDots}>
+        <span>.</span><span>.</span><span>.</span>
+      </span>
+    </div>
+  );
+}
+
+// Inline image component with loading and error states
+function InlineImage({ src }: { src: string }) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const handleLoad = () => {
+    setIsLoading(false);
+  };
+
+  const handleError = () => {
+    setIsLoading(false);
+    setHasError(true);
+  };
+
+  const handleClick = () => {
+    if (!hasError) {
+      setIsExpanded(!isExpanded);
+    }
+  };
+
+  if (hasError) {
+    return (
+      <div className={styles.imageError}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="9" y1="9" x2="15" y2="15"/>
+          <line x1="15" y1="9" x2="9" y2="15"/>
+        </svg>
+        <span>Image failed to load</span>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div 
+        className={`${styles.inlineImageContainer} ${isLoading ? styles.imageIsLoading : ''}`}
+        onClick={handleClick}
+      >
+        {isLoading && (
+          <div className={styles.imageSkeleton}>
+            <div className={styles.imageSkeletonShimmer}></div>
+          </div>
+        )}
+        <img
+          src={src}
+          alt="Referenced image from source"
+          className={styles.inlineImage}
+          onLoad={handleLoad}
+          onError={handleError}
+          style={{ opacity: isLoading ? 0 : 1 }}
+        />
+        {!isLoading && (
+          <div className={styles.imageOverlay}>
+            <span className={styles.imageExpandHint}>Click to {isExpanded ? 'collapse' : 'expand'}</span>
+          </div>
+        )}
+      </div>
+      
+      {/* Expanded lightbox view */}
+      {isExpanded && (
+        <div className={styles.imageLightbox} onClick={() => setIsExpanded(false)}>
+          <div className={styles.imageLightboxContent}>
+            <img src={src} alt="Expanded view" className={styles.imageLightboxImage} />
+            <button className={styles.imageLightboxClose} onClick={() => setIsExpanded(false)}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -427,7 +546,7 @@ function DataGraph({ graphContent }: { graphContent: string }) {
   );
 }
 
-// Render content segments (text, tables, graphs, loading states)
+// Render content segments (text, tables, graphs, images, loading states)
 function RenderContent({ content, isStreaming }: { content: string; isStreaming: boolean }) {
   const segments = parseContentSegments(content, isStreaming);
   
@@ -447,6 +566,10 @@ function RenderContent({ content, isStreaming }: { content: string; isStreaming:
             return <DataGraph key={idx} graphContent={segment.content} />;
           case 'graph-loading':
             return <GraphLoading key={idx} />;
+          case 'image':
+            return <InlineImage key={idx} src={segment.content} />;
+          case 'image-loading':
+            return <ImageLoading key={idx} />;
           default:
             return null;
         }
