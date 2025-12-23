@@ -324,6 +324,7 @@ export default function DashboardPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
           },
           body: JSON.stringify({
             message: content,
@@ -686,6 +687,7 @@ export default function DashboardPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
         },
         body: JSON.stringify({ sessionId }),
       });

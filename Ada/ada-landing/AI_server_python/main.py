@@ -192,7 +192,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - The fourth query should be used as anther specific query aimed to gather information of somehting very specific to the users question. 
                     - At the end of each search query please add depth<number> to the query to indicate how many sources to search for.
                     - Example depth: Example: 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10
-                    - For simple searches the number should be small
+                    - For simple searches the number should be small and for comlicated searches the number should approach 10
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
