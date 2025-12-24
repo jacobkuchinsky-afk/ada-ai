@@ -173,6 +173,9 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 §IMG:https://example.com/image.jpg§
                 Image rules:
                 - ONLY use image URLs from the "Available Images" list provided - NEVER make up or guess image URLs
+                - Supported formats: .jpg, .jpeg, .png, .webp, .gif, .bmp, .avif (and CDN-hosted images)
+                - ONLY reference images that have one of these supported extensions or are from known image CDNs
+                - Do NOT reference .svg files or URLs without clear image extensions unless from a CDN
                 - Place images inline where they are most relevant to the surrounding text
                 - Use images sparingly - only when they add real value to the explanation
                 - Add a brief description before or after the image to explain what it shows
