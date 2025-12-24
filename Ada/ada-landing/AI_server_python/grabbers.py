@@ -144,11 +144,14 @@ def extract_images(soup, page_url, max_images=5):
     """
     Extract relevant images from a page with smart filtering.
     
+    Supports: .jpg, .jpeg, .png, .webp, .gif, .bmp, .svg, .avif
+    
     Filters out:
     - Images smaller than 50x50px (icons)
     - Data URIs
     - Common icon/logo patterns
     - Social media sharing icons
+    - Tracking pixels
     
     Args:
         soup: BeautifulSoup object of the page
@@ -161,17 +164,20 @@ def extract_images(soup, page_url, max_images=5):
     images = []
     seen_urls = set()
     
+    # Valid image extensions (case insensitive)
+    valid_extensions = re.compile(r'\.(jpg|jpeg|png|webp|gif|bmp|avif)(\?.*)?$', re.IGNORECASE)
+    
     # Patterns to skip (icons, logos, social media, etc.)
     skip_patterns = [
-        r'favicon', r'logo', r'icon', r'sprite', r'avatar',
+        r'favicon', r'logo[-_]', r'[-_]logo', r'[-_]icon', r'icon[-_]',
+        r'sprite', r'avatar',
         r'facebook', r'twitter', r'linkedin', r'instagram', r'pinterest',
         r'youtube', r'tiktok', r'whatsapp', r'telegram', r'reddit',
-        r'share', r'social', r'button', r'badge', r'emoji',
+        r'share[-_]', r'[-_]share', r'social', r'button', r'badge', r'emoji',
         r'loading', r'spinner', r'placeholder', r'blank',
-        r'pixel', r'tracking', r'analytics', r'ad[-_]?', r'banner[-_]?ad',
-        r'1x1', r'spacer', r'transparent', r'arrow', r'chevron',
-        r'close', r'menu', r'hamburger', r'search[-_]?icon',
-        r'\.gif$',  # Skip most GIFs (usually animations/icons)
+        r'pixel', r'tracking', r'analytics', r'banner[-_]?ad',
+        r'1x1', r'spacer', r'transparent\.', r'arrow[-_]', r'chevron',
+        r'close[-_]', r'[-_]close', r'menu[-_]', r'hamburger',
     ]
     skip_regex = re.compile('|'.join(skip_patterns), re.IGNORECASE)
     
@@ -182,8 +188,17 @@ def extract_images(soup, page_url, max_images=5):
             
         # Get src attribute (try multiple common attributes)
         src = img.get('src') or img.get('data-src') or img.get('data-lazy-src')
+        
+        # Try srcset if no src found
+        if not src and img.get('srcset'):
+            srcset = img.get('srcset', '')
+            src = srcset.split(',')[0].split()[0] if srcset else None
+        
         if not src:
             continue
+        
+        # Clean up srcset format (remove size descriptors like "2x" or "800w")
+        src = src.split()[0] if ' ' in src else src
         
         # Skip data URIs
         if src.startswith('data:'):
@@ -197,6 +212,17 @@ def extract_images(soup, page_url, max_images=5):
         if src in seen_urls:
             continue
         seen_urls.add(src)
+        
+        # Check if URL has a valid image extension OR contains image indicators
+        url_lower = src.lower()
+        has_valid_extension = valid_extensions.search(url_lower)
+        has_image_path = any(x in url_lower for x in ['/image', '/img', '/photo', '/picture', '/media', '/upload'])
+        
+        # Skip if no valid extension and no image path indicators (likely not an image)
+        if not has_valid_extension and not has_image_path:
+            # Allow through if it looks like a CDN image URL
+            if not any(cdn in url_lower for cdn in ['cloudinary', 'imgix', 'cloudfront', 'akamai', 'fastly', 'cdn']):
+                continue
         
         # Skip if URL matches skip patterns
         if skip_regex.search(src):
