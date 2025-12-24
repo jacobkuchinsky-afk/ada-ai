@@ -114,6 +114,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
                 (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. ALWAYS ADD SOURCES WHEN THERE WAS TEXT PROVIDED!)
 
+
                 Format:
                 Please use markdown formating: For example use bold to exemplify important data or ideas make sure to use bold sparingly to get the most important data across. Use the code block for code.
                 
@@ -197,6 +198,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - At the end of each search query please add depth<number> to the query to indicate how many sources to search for.
                     - Example depth: Example: 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10
                     - For simple searches the number should be small and for comlicated searches the number should approach 10
+                    - If the user asks for multiple things search each thing sperate as you have many searches. This will allow more details insetad of trying to group them
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
