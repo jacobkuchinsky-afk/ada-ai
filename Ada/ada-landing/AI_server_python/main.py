@@ -110,7 +110,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 Current date: {current_date}
                 Output Structure:
                 (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
-                (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text.)
+                (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text. In this output you may also add graphs and tables as described BUT ONLY WHEN IT MAKES SENSE TO DO SO.)
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
                 (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. ALWAYS ADD SOURCES WHEN THERE WAS TEXT PROVIDED!)
 
@@ -198,7 +198,8 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - At the end of each search query please add depth<number> to the query to indicate how many sources to search for.
                     - Example depth: Example: 1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10
                     - For simple searches the number should be small and for comlicated searches the number should approach 10
-                    - If the user asks for multiple things search each thing sperate as you have many searches. This will allow more details insetad of trying to group them
+                    - If the user asks for multiple things search each thing sperate as you have many searches. This will allow more details insetad of trying to group them. For example if the user asks how many chickens are there for each cow instead of searching that thing exactly search for the amount of chickens and then the amount of cows.
+                    - Think about if the given search query would return any use results or if it is to specific, if it is to specific then possibly chop the query into multiple queries.
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
                     Important: You HEAVILY favor searching for answers over not searching
