@@ -199,8 +199,8 @@
   font-family: var(--font-ubuntu), sans-serif;
   font-size: 14px;
   font-weight: 600;
-  color: #fff;
-  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  color: var(--background);
+  background: var(--foreground);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -208,12 +208,12 @@
 }
 
 .upgradeButton:hover:not(:disabled) {
+  opacity: 0.9;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .upgradeButton:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
   transform: none;
 }
