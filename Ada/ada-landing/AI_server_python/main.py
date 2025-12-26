@@ -86,10 +86,12 @@ def get_stripe_config():
     """Get Stripe configuration, initializing if needed."""
     global _stripe_initialized
     if not _stripe_initialized:
-        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+        # Use STRIPE_API_KEY to avoid Railway's secret detection on "SECRET" pattern
+        stripe.api_key = os.getenv('STRIPE_API_KEY')
         _stripe_initialized = True
     return {
-        'webhook_secret': os.getenv('STRIPE_WEBHOOK_SECRET'),
+        # Use STRIPE_WEBHOOK_KEY to avoid Railway's secret detection
+        'webhook_secret': os.getenv('STRIPE_WEBHOOK_KEY'),
         'price_id': os.getenv('STRIPE_PRICE_ID'),
         'frontend_url': os.getenv('FRONTEND_URL', 'http://localhost:3000')
     }

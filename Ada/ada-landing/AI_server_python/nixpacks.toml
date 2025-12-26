@@ -1,0 +1,12 @@
+[phases.build]
+cmds = []
+
+[phases.install]
+cmds = [
+    "python -m venv /app/.venv",
+    "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "gunicorn --worker-class gevent --bind 0.0.0.0:$PORT main:app"
+
