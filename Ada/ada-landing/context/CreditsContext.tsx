@@ -5,7 +5,6 @@ import { useAuth } from './AuthContext';
 import {
   getUserCredits,
   useCredits as useCreditsService,
-  upgradeToPremium as upgradeToPremiumService,
   UserCredits,
 } from '@/lib/creditsService';
 
@@ -17,7 +16,6 @@ interface CreditsContextType {
   isLoading: boolean;
   useCredits: (amount: number) => Promise<boolean>;
   refreshCredits: () => Promise<void>;
-  upgradeToPremium: (code: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
@@ -65,17 +63,6 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     return success;
   }, [user]);
 
-  const upgradeToPremium = useCallback(async (code: string): Promise<{ success: boolean; message: string }> => {
-    if (!user) return { success: false, message: 'Not logged in' };
-
-    const result = await upgradeToPremiumService(user.uid, code);
-    if (result.success) {
-      // Refresh credits to get updated state
-      await loadCredits();
-    }
-    return result;
-  }, [user, loadCredits]);
-
   const value: CreditsContextType = {
     credits: creditsData?.credits ?? 0,
     maxCredits: creditsData?.maxCredits ?? 10,
@@ -84,7 +71,6 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     isLoading,
     useCredits,
     refreshCredits,
-    upgradeToPremium,
   };
 
   return (

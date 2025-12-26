@@ -10,19 +10,13 @@ import styles from './profile.module.css';
 
 export default function ProfilePage() {
   const { user, loading, logout, updateUsername } = useAuth();
-  const { credits, maxCredits, isPremium, premiumExpiresAt, upgradeToPremium, refreshCredits } = useCreditsContext();
+  const { credits, maxCredits, isPremium, premiumExpiresAt } = useCreditsContext();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [updateLoading, setUpdateLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-
-  // Code entry state
-  const [code, setCode] = useState('');
-  const [codeLoading, setCodeLoading] = useState(false);
-  const [codeError, setCodeError] = useState('');
-  const [codeSuccess, setCodeSuccess] = useState('');
 
   useEffect(() => {
     if (!loading && !user) {
@@ -71,32 +65,6 @@ export default function ProfilePage() {
       setError('Failed to update username');
     } finally {
       setUpdateLoading(false);
-    }
-  };
-
-  const handleSubmitCode = async () => {
-    if (!code.trim()) {
-      setCodeError('Please enter a code');
-      return;
-    }
-
-    setCodeLoading(true);
-    setCodeError('');
-    setCodeSuccess('');
-
-    try {
-      const result = await upgradeToPremium(code.trim());
-      if (result.success) {
-        setCodeSuccess(result.message);
-        setCode('');
-        await refreshCredits();
-      } else {
-        setCodeError(result.message);
-      }
-    } catch {
-      setCodeError('Failed to apply code');
-    } finally {
-      setCodeLoading(false);
     }
   };
 
@@ -175,35 +143,6 @@ export default function ProfilePage() {
                 </p>
               )}
             </div>
-
-            {/* Premium Code Entry - Only show if not premium */}
-            {!isPremium && (
-              <div className={styles.infoGroup}>
-                <label className={styles.label}>Upgrade Code</label>
-                {codeError && <p className={styles.codeError}>{codeError}</p>}
-                {codeSuccess && <p className={styles.codeSuccess}>{codeSuccess}</p>}
-                <div className={styles.codeForm}>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className={styles.codeInput}
-                    placeholder="Enter upgrade code"
-                    disabled={codeLoading}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  <button 
-                    onClick={handleSubmitCode} 
-                    className={styles.codeButton}
-                    disabled={codeLoading}
-                  >
-                    {codeLoading ? 'Applying...' : 'Apply'}
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div className={styles.infoGroup}>
               <div className={styles.infoHeader}>
