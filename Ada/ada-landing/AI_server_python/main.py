@@ -145,6 +145,21 @@ CORS(app, resources={r"/api/*": {
     "methods": ["GET", "POST", "OPTIONS"]
 }})
 
+# Global error handler to ensure CORS headers are always sent
+@app.errorhandler(Exception)
+def handle_exception(e):
+    """Handle all uncaught exceptions and return JSON with CORS headers."""
+    print(f"[ERROR] Unhandled exception: {e}")
+    import traceback
+    traceback.print_exc()
+    response = Response(
+        json.dumps({"error": "Internal server error", "details": str(e)}),
+        status=500,
+        mimetype='application/json'
+    )
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    return response
+
 current_date = date.today()
 
 # Model configurations
@@ -989,10 +1004,13 @@ def create_checkout():
     """Create a Stripe Checkout session for premium subscription."""
     # Initialize Stripe
     config = get_stripe_config()
+    print(f"[Checkout] Config loaded - API key set: {bool(stripe.api_key)}, Price ID: {config.get('price_id')}")
     
     data = request.json
-    user_id = data.get('userId')
-    user_email = data.get('email')
+    user_id = data.get('userId') if data else None
+    user_email = data.get('email') if data else None
+    
+    print(f"[Checkout] Request - userId: {user_id}, email: {user_email}")
     
     if not user_id:
         return Response(
@@ -1002,8 +1020,17 @@ def create_checkout():
         )
     
     if not stripe.api_key:
+        print("[Checkout] ERROR: Stripe API key not configured")
         return Response(
-            json.dumps({"error": "Stripe not configured"}),
+            json.dumps({"error": "Stripe not configured - missing STRIPE_API_KEY"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    if not config.get('price_id'):
+        print("[Checkout] ERROR: Stripe price ID not configured")
+        return Response(
+            json.dumps({"error": "Stripe not configured - missing STRIPE_PRICE_ID"}),
             status=500,
             mimetype='application/json'
         )
