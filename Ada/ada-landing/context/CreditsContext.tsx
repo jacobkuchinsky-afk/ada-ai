@@ -72,8 +72,11 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
   const createCheckoutSession = useCallback(async (): Promise<{ success: boolean; url?: string; error?: string }> => {
     if (!user) return { success: false, error: 'Not logged in' };
 
+    const apiUrl = `${API_URL}/api/create-checkout`;
+    console.log('[Checkout] Calling API:', apiUrl);
+
     try {
-      const response = await fetch(`${API_URL}/api/create-checkout`, {
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -87,6 +90,7 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
       });
 
       const data = await response.json();
+      console.log('[Checkout] Response:', response.status, data);
 
       if (!response.ok) {
         return { success: false, error: data.error || 'Failed to create checkout session' };
@@ -94,8 +98,9 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
 
       return { success: true, url: data.url };
     } catch (error) {
-      console.error('Error creating checkout session:', error);
-      return { success: false, error: 'Failed to connect to server' };
+      console.error('[Checkout] Error:', error);
+      console.error('[Checkout] API_URL was:', API_URL);
+      return { success: false, error: `Failed to connect to server (${API_URL})` };
     }
   }, [user]);
 
