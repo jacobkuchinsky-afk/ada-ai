@@ -373,6 +373,145 @@
   }
 }
 
+/* Subscription Section */
+.subscriptionStatus {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--foreground);
+  margin: 0 0 12px 0;
+}
+
+.upgradeButton {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 24px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 8px;
+}
+
+.upgradeButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+}
+
+.upgradeButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.cancelSubscriptionButton {
+  width: 100%;
+  padding: 10px 16px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 12px;
+}
+
+.cancelSubscriptionButton:hover {
+  color: #ff6b6b;
+  border-color: rgba(255, 107, 107, 0.3);
+}
+
+.cancelConfirm {
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba(255, 107, 107, 0.05);
+  border: 1px solid rgba(255, 107, 107, 0.2);
+  border-radius: 10px;
+}
+
+.cancelWarning {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+  text-align: center;
+}
+
+.cancelActions {
+  display: flex;
+  gap: 8px;
+}
+
+.cancelKeepButton {
+  flex: 1;
+  padding: 10px 16px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: #3b82f6;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelKeepButton:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.cancelConfirmButton {
+  flex: 1;
+  padding: 10px 16px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ff6b6b;
+  background: transparent;
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cancelConfirmButton:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.cancelKeepButton:disabled,
+.cancelConfirmButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.cancellingNote {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 12px;
+  color: #f59e0b;
+  margin: 8px 0 0 0;
+  text-align: center;
+}
+
+.buttonSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 @media (max-width: 480px) {
   .card {
     padding: 36px 24px;

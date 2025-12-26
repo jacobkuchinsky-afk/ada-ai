@@ -4,13 +4,17 @@ import re
 import gc
 import threading
 import uuid
+import base64
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
-from datetime import date
+from datetime import date, datetime, timedelta
 from dotenv import load_dotenv
 from openai import OpenAI
 import grabbers
 import concurrent.futures
+import stripe
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 
 # Thread-safe dict to track skip search requests by session_id
@@ -74,6 +78,51 @@ def clean_ai_output(text):
 
 # Load environment variables
 load_dotenv()
+
+# Initialize Stripe
+stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+
+# Initialize Firebase Admin SDK
+_firebase_initialized = False
+_firestore_db = None
+
+def get_firestore_db():
+    """Get Firestore database instance, initializing Firebase if needed."""
+    global _firebase_initialized, _firestore_db
+    
+    if _firebase_initialized:
+        return _firestore_db
+    
+    # Try to initialize Firebase Admin SDK
+    firebase_service_account = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+    
+    if firebase_service_account:
+        try:
+            # Check if it's base64 encoded
+            try:
+                decoded = base64.b64decode(firebase_service_account)
+                service_account_info = json.loads(decoded)
+            except:
+                # Assume it's raw JSON
+                service_account_info = json.loads(firebase_service_account)
+            
+            cred = credentials.Certificate(service_account_info)
+            firebase_admin.initialize_app(cred)
+            _firestore_db = firestore.client()
+            _firebase_initialized = True
+            print("Firebase Admin SDK initialized successfully")
+        except Exception as e:
+            print(f"Error initializing Firebase Admin SDK: {e}")
+            _firestore_db = None
+    else:
+        print("Warning: FIREBASE_SERVICE_ACCOUNT not set, Stripe webhooks won't update Firestore")
+        _firestore_db = None
+    
+    _firebase_initialized = True
+    return _firestore_db
 
 app = Flask(__name__)
 
@@ -922,6 +971,295 @@ def skip_search():
         status=200,
         mimetype='application/json'
     )
+
+
+@app.route('/api/create-checkout', methods=['POST'])
+def create_checkout():
+    """Create a Stripe Checkout session for premium subscription."""
+    data = request.json
+    user_id = data.get('userId')
+    user_email = data.get('email')
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    if not stripe.api_key:
+        return Response(
+            json.dumps({"error": "Stripe not configured"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    try:
+        # Check if user already has a Stripe customer ID
+        db = get_firestore_db()
+        existing_customer_id = None
+        
+        if db:
+            user_doc = db.collection('users').document(user_id).get()
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                existing_customer_id = user_data.get('stripeCustomerId')
+        
+        # Create or reuse customer
+        if existing_customer_id:
+            customer_id = existing_customer_id
+        else:
+            # Create a new Stripe customer
+            customer_params = {'metadata': {'firebaseUserId': user_id}}
+            if user_email:
+                customer_params['email'] = user_email
+            customer = stripe.Customer.create(**customer_params)
+            customer_id = customer.id
+            
+            # Store customer ID in Firestore
+            if db:
+                db.collection('users').document(user_id).set({
+                    'stripeCustomerId': customer_id
+                }, merge=True)
+        
+        # Create Checkout session
+        checkout_session = stripe.checkout.Session.create(
+            customer=customer_id,
+            payment_method_types=['card'],
+            line_items=[{
+                'price': STRIPE_PRICE_ID,
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=f"{FRONTEND_URL}/dashboard?payment=success",
+            cancel_url=f"{FRONTEND_URL}/profile?payment=cancelled",
+            metadata={
+                'firebaseUserId': user_id
+            },
+            subscription_data={
+                'metadata': {
+                    'firebaseUserId': user_id
+                }
+            }
+        )
+        
+        return Response(
+            json.dumps({"url": checkout_session.url, "sessionId": checkout_session.id}),
+            status=200,
+            mimetype='application/json'
+        )
+        
+    except stripe.error.StripeError as e:
+        print(f"Stripe error: {e}")
+        return Response(
+            json.dumps({"error": str(e)}),
+            status=400,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error creating checkout session: {e}")
+        return Response(
+            json.dumps({"error": "Failed to create checkout session"}),
+            status=500,
+            mimetype='application/json'
+        )
+
+
+@app.route('/api/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    """Handle Stripe webhook events."""
+    payload = request.get_data(as_text=True)
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    if not STRIPE_WEBHOOK_SECRET:
+        print("Warning: STRIPE_WEBHOOK_SECRET not set")
+        return Response(status=400)
+    
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError as e:
+        print(f"Invalid payload: {e}")
+        return Response(status=400)
+    except stripe.error.SignatureVerificationError as e:
+        print(f"Invalid signature: {e}")
+        return Response(status=400)
+    
+    db = get_firestore_db()
+    if not db:
+        print("Firestore not available, cannot process webhook")
+        return Response(status=500)
+    
+    event_type = event['type']
+    print(f"Processing Stripe webhook: {event_type}")
+    
+    try:
+        if event_type == 'checkout.session.completed':
+            session = event['data']['object']
+            user_id = session.get('metadata', {}).get('firebaseUserId')
+            subscription_id = session.get('subscription')
+            customer_id = session.get('customer')
+            
+            if user_id and subscription_id:
+                # Get subscription details for the period end
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                period_end = datetime.fromtimestamp(subscription.current_period_end)
+                
+                # Update user to premium
+                db.collection('users').document(user_id).set({
+                    'isPremium': True,
+                    'premiumExpiresAt': period_end,
+                    'stripeCustomerId': customer_id,
+                    'stripeSubscriptionId': subscription_id,
+                    'subscriptionStatus': 'active',
+                    'credits': 200,  # Give them premium credits immediately
+                }, merge=True)
+                print(f"User {user_id} upgraded to premium, expires {period_end}")
+        
+        elif event_type == 'customer.subscription.updated':
+            subscription = event['data']['object']
+            user_id = subscription.get('metadata', {}).get('firebaseUserId')
+            
+            if user_id:
+                cancel_at_period_end = subscription.get('cancel_at_period_end', False)
+                status = subscription.get('status')
+                period_end = datetime.fromtimestamp(subscription.current_period_end)
+                
+                update_data = {
+                    'premiumExpiresAt': period_end,
+                }
+                
+                if cancel_at_period_end:
+                    update_data['subscriptionStatus'] = 'cancelling'
+                    print(f"User {user_id} subscription cancelling at period end")
+                elif status == 'active':
+                    update_data['subscriptionStatus'] = 'active'
+                    update_data['isPremium'] = True
+                    print(f"User {user_id} subscription renewed/active")
+                
+                db.collection('users').document(user_id).set(update_data, merge=True)
+        
+        elif event_type == 'customer.subscription.deleted':
+            subscription = event['data']['object']
+            user_id = subscription.get('metadata', {}).get('firebaseUserId')
+            
+            if user_id:
+                # Subscription ended - remove premium
+                db.collection('users').document(user_id).set({
+                    'isPremium': False,
+                    'subscriptionStatus': 'cancelled',
+                    'stripeSubscriptionId': None,
+                }, merge=True)
+                print(f"User {user_id} subscription cancelled, premium removed")
+        
+        elif event_type == 'invoice.payment_failed':
+            invoice = event['data']['object']
+            subscription_id = invoice.get('subscription')
+            
+            if subscription_id:
+                # Get user ID from subscription metadata
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                user_id = subscription.get('metadata', {}).get('firebaseUserId')
+                
+                if user_id:
+                    db.collection('users').document(user_id).set({
+                        'subscriptionStatus': 'payment_failed',
+                    }, merge=True)
+                    print(f"User {user_id} payment failed")
+        
+        return Response(json.dumps({"received": True}), status=200, mimetype='application/json')
+        
+    except Exception as e:
+        print(f"Error processing webhook: {e}")
+        return Response(status=500)
+
+
+@app.route('/api/cancel-subscription', methods=['POST'])
+def cancel_subscription():
+    """Cancel a user's subscription at the end of the billing period."""
+    data = request.json
+    user_id = data.get('userId')
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    if not stripe.api_key:
+        return Response(
+            json.dumps({"error": "Stripe not configured"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    try:
+        db = get_firestore_db()
+        if not db:
+            return Response(
+                json.dumps({"error": "Database not available"}),
+                status=500,
+                mimetype='application/json'
+            )
+        
+        # Get user's subscription ID
+        user_doc = db.collection('users').document(user_id).get()
+        if not user_doc.exists:
+            return Response(
+                json.dumps({"error": "User not found"}),
+                status=404,
+                mimetype='application/json'
+            )
+        
+        user_data = user_doc.to_dict()
+        subscription_id = user_data.get('stripeSubscriptionId')
+        
+        if not subscription_id:
+            return Response(
+                json.dumps({"error": "No active subscription found"}),
+                status=400,
+                mimetype='application/json'
+            )
+        
+        # Cancel at period end (user keeps premium until end of billing cycle)
+        subscription = stripe.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=True
+        )
+        
+        # Update Firestore
+        period_end = datetime.fromtimestamp(subscription.current_period_end)
+        db.collection('users').document(user_id).set({
+            'subscriptionStatus': 'cancelling',
+            'premiumExpiresAt': period_end,
+        }, merge=True)
+        
+        return Response(
+            json.dumps({
+                "success": True,
+                "message": f"Subscription will cancel at end of billing period",
+                "expiresAt": period_end.isoformat()
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+        
+    except stripe.error.StripeError as e:
+        print(f"Stripe error cancelling subscription: {e}")
+        return Response(
+            json.dumps({"error": str(e)}),
+            status=400,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error cancelling subscription: {e}")
+        return Response(
+            json.dumps({"error": "Failed to cancel subscription"}),
+            status=500,
+            mimetype='application/json'
+        )
 
 
 @app.route('/api/health', methods=['GET'])

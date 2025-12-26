@@ -6,10 +6,10 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
-const PREMIUM_CODE = "spligma";
 const FREE_DAILY_CREDITS = 20;
 const PREMIUM_DAILY_CREDITS = 200;
-const PREMIUM_DURATION_DAYS = 30;
+
+export type SubscriptionStatus = 'active' | 'cancelling' | 'cancelled' | 'payment_failed' | 'none';
 
 export interface UserCredits {
   credits: number;
@@ -17,6 +17,9 @@ export interface UserCredits {
   isPremium: boolean;
   premiumExpiresAt: Date | null;
   lastCreditReset: Date;
+  subscriptionStatus: SubscriptionStatus;
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
 }
 
 // Get current UTC date as string (YYYY-MM-DD)
@@ -62,6 +65,7 @@ async function initializeUserCredits(userId: string): Promise<void> {
       lastCreditReset: getUTCDateString(),
       isPremium: false,
       premiumExpiresAt: null,
+      subscriptionStatus: 'none',
     });
   }
 }
@@ -88,6 +92,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
         isPremium: false,
         premiumExpiresAt: null,
         lastCreditReset: new Date(),
+        subscriptionStatus: 'none',
       };
     }
 
@@ -96,6 +101,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
     const currentDate = getUTCDateString();
     const premiumExpiresAt = toDate(data.premiumExpiresAt);
     const isPremium = isPremiumValid(premiumExpiresAt);
+    const subscriptionStatus: SubscriptionStatus = data.subscriptionStatus || 'none';
 
     // Check if we need to reset credits (new day)
     if (lastResetDate !== currentDate) {
@@ -112,6 +118,9 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
         isPremium,
         premiumExpiresAt,
         lastCreditReset: new Date(),
+        subscriptionStatus,
+        stripeCustomerId: data.stripeCustomerId,
+        stripeSubscriptionId: data.stripeSubscriptionId,
       };
     }
 
@@ -128,6 +137,9 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
       isPremium,
       premiumExpiresAt,
       lastCreditReset: new Date(lastResetDate),
+      subscriptionStatus,
+      stripeCustomerId: data.stripeCustomerId,
+      stripeSubscriptionId: data.stripeSubscriptionId,
     };
   } catch (error) {
     // Return defaults if there's any error (e.g., permissions during initial load)
@@ -138,6 +150,7 @@ export async function getUserCredits(userId: string): Promise<UserCredits> {
       isPremium: false,
       premiumExpiresAt: null,
       lastCreditReset: new Date(),
+      subscriptionStatus: 'none',
     };
   }
 }
@@ -180,56 +193,6 @@ export async function hasEnoughCredits(
 }
 
 /**
- * Upgrade user to premium with code validation
- */
-export async function upgradeToPremium(
-  userId: string,
-  code: string
-): Promise<{ success: boolean; message: string }> {
-  // Clean the code - remove whitespace and normalize
-  const cleanCode = code.trim().toLowerCase().replace(/\s/g, '');
-  const expectedCode = PREMIUM_CODE.toLowerCase();
-  
-  if (cleanCode !== expectedCode) {
-    return { success: false, message: "Invalid code" };
-  }
-
-  try {
-    const userRef = doc(db, "users", userId);
-    
-    // Ensure user document exists first
-    const currentCredits = await getUserCredits(userId);
-
-    // Already premium?
-    if (currentCredits.isPremium) {
-      return { success: false, message: "You are already premium!" };
-    }
-
-    // Calculate expiry date (30 days from now)
-    const expiryDate = new Date();
-    expiryDate.setDate(expiryDate.getDate() + PREMIUM_DURATION_DAYS);
-
-    // Upgrade credits to premium limit
-    const newCredits = Math.max(currentCredits.credits, PREMIUM_DAILY_CREDITS);
-
-    // Use setDoc with merge to handle both existing and new documents
-    await setDoc(userRef, {
-      isPremium: true,
-      premiumExpiresAt: Timestamp.fromDate(expiryDate),
-      credits: newCredits,
-    }, { merge: true });
-
-    return {
-      success: true,
-      message: `Upgraded to Premium! Expires on ${expiryDate.toLocaleDateString()}`,
-    };
-  } catch (error) {
-    console.error('Error upgrading to premium:', error);
-    return { success: false, message: "Failed to upgrade. Please try again." };
-  }
-}
-
-/**
  * Get formatted time until premium expires
  */
 export function formatPremiumExpiry(expiresAt: Date | null): string {
@@ -246,4 +209,3 @@ export function formatPremiumExpiry(expiresAt: Date | null): string {
   const hours = Math.floor(diff / (1000 * 60 * 60));
   return `${hours} hour${hours === 1 ? "" : "s"} remaining`;
 }
-

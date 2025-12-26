@@ -7,3 +7,5 @@ python-dotenv>=1.0.0
 gunicorn>=21.0.0
 gevent>=24.0.0
 ddgs>=7.0.0
+stripe>=8.0.0
+firebase-admin>=6.0.0

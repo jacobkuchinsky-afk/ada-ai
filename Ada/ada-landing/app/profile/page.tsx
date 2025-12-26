@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { useCreditsContext } from '@/context/CreditsContext';
@@ -10,19 +10,28 @@ import styles from './profile.module.css';
 
 export default function ProfilePage() {
   const { user, loading, logout, updateUsername } = useAuth();
-  const { credits, maxCredits, isPremium, premiumExpiresAt, upgradeToPremium, refreshCredits } = useCreditsContext();
+  const { 
+    credits, 
+    maxCredits, 
+    isPremium, 
+    premiumExpiresAt, 
+    subscriptionStatus,
+    createCheckoutSession, 
+    cancelSubscription,
+    refreshCredits 
+  } = useCreditsContext();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [isEditing, setIsEditing] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [updateLoading, setUpdateLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Code entry state
-  const [code, setCode] = useState('');
-  const [codeLoading, setCodeLoading] = useState(false);
-  const [codeError, setCodeError] = useState('');
-  const [codeSuccess, setCodeSuccess] = useState('');
+  // Upgrade/cancel state
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -35,6 +44,21 @@ export default function ProfilePage() {
       setNewUsername(user.displayName);
     }
   }, [user]);
+
+  // Check for payment status from URL params
+  useEffect(() => {
+    const payment = searchParams.get('payment');
+    if (payment === 'success') {
+      setSuccess('Payment successful! Your premium subscription is now active.');
+      // Refresh credits to get updated status
+      refreshCredits();
+      // Clear the URL param
+      router.replace('/profile');
+    } else if (payment === 'cancelled') {
+      setError('Payment was cancelled.');
+      router.replace('/profile');
+    }
+  }, [searchParams, refreshCredits, router]);
 
   const handleLogout = async () => {
     await logout();
@@ -74,29 +98,42 @@ export default function ProfilePage() {
     }
   };
 
-  const handleSubmitCode = async () => {
-    if (!code.trim()) {
-      setCodeError('Please enter a code');
-      return;
-    }
-
-    setCodeLoading(true);
-    setCodeError('');
-    setCodeSuccess('');
+  const handleUpgrade = async () => {
+    setUpgradeLoading(true);
+    setError('');
 
     try {
-      const result = await upgradeToPremium(code.trim());
-      if (result.success) {
-        setCodeSuccess(result.message);
-        setCode('');
-        await refreshCredits();
+      const result = await createCheckoutSession();
+      if (result.success && result.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = result.url;
       } else {
-        setCodeError(result.message);
+        setError(result.error || 'Failed to start checkout');
       }
     } catch {
-      setCodeError('Failed to apply code');
+      setError('Failed to start checkout');
     } finally {
-      setCodeLoading(false);
+      setUpgradeLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    setCancelLoading(true);
+    setError('');
+
+    try {
+      const result = await cancelSubscription();
+      if (result.success) {
+        setSuccess(result.message);
+        setShowCancelConfirm(false);
+        setTimeout(() => setSuccess(''), 5000);
+      } else {
+        setError(result.message);
+      }
+    } catch {
+      setError('Failed to cancel subscription');
+    } finally {
+      setCancelLoading(false);
     }
   };
 
@@ -113,6 +150,21 @@ export default function ProfilePage() {
   if (!user) {
     return null;
   }
+
+  const getSubscriptionStatusText = () => {
+    switch (subscriptionStatus) {
+      case 'active':
+        return 'Active';
+      case 'cancelling':
+        return 'Cancels at period end';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'payment_failed':
+        return 'Payment failed';
+      default:
+        return 'Free';
+    }
+  };
 
   return (
     <main className={styles.main}>
@@ -176,34 +228,82 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* Premium Code Entry - Only show if not premium */}
-            {!isPremium && (
-              <div className={styles.infoGroup}>
-                <label className={styles.label}>Upgrade Code</label>
-                {codeError && <p className={styles.codeError}>{codeError}</p>}
-                {codeSuccess && <p className={styles.codeSuccess}>{codeSuccess}</p>}
-                <div className={styles.codeForm}>
-                  <input
-                    type="text"
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    className={styles.codeInput}
-                    placeholder="Enter upgrade code"
-                    disabled={codeLoading}
-                    autoComplete="off"
-                    autoCorrect="off"
-                    spellCheck={false}
-                  />
-                  <button 
-                    onClick={handleSubmitCode} 
-                    className={styles.codeButton}
-                    disabled={codeLoading}
-                  >
-                    {codeLoading ? 'Applying...' : 'Apply'}
-                  </button>
+            {/* Subscription Section */}
+            <div className={styles.infoGroup}>
+              <label className={styles.label}>Subscription</label>
+              <p className={styles.subscriptionStatus}>{getSubscriptionStatusText()}</p>
+              
+              {/* Upgrade Button - Show if not premium or if subscription cancelled/failed */}
+              {(!isPremium || subscriptionStatus === 'cancelled' || subscriptionStatus === 'payment_failed') && (
+                <button 
+                  onClick={handleUpgrade} 
+                  className={styles.upgradeButton}
+                  disabled={upgradeLoading}
+                >
+                  {upgradeLoading ? (
+                    <span className={styles.buttonSpinner}></span>
+                  ) : (
+                    <>
+                      <svg 
+                        width="18" 
+                        height="18" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      Upgrade to Premium - $10/month
+                    </>
+                  )}
+                </button>
+              )}
+
+              {/* Cancel Button - Show if premium and subscription is active */}
+              {isPremium && subscriptionStatus === 'active' && !showCancelConfirm && (
+                <button 
+                  onClick={() => setShowCancelConfirm(true)} 
+                  className={styles.cancelSubscriptionButton}
+                >
+                  Cancel Subscription
+                </button>
+              )}
+
+              {/* Cancel Confirmation */}
+              {showCancelConfirm && (
+                <div className={styles.cancelConfirm}>
+                  <p className={styles.cancelWarning}>
+                    Are you sure? You&apos;ll keep premium until {premiumExpiresAt?.toLocaleDateString()}.
+                  </p>
+                  <div className={styles.cancelActions}>
+                    <button 
+                      onClick={() => setShowCancelConfirm(false)} 
+                      className={styles.cancelKeepButton}
+                      disabled={cancelLoading}
+                    >
+                      Keep Premium
+                    </button>
+                    <button 
+                      onClick={handleCancelSubscription} 
+                      className={styles.cancelConfirmButton}
+                      disabled={cancelLoading}
+                    >
+                      {cancelLoading ? 'Cancelling...' : 'Yes, Cancel'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Cancelling status */}
+              {subscriptionStatus === 'cancelling' && (
+                <p className={styles.cancellingNote}>
+                  Your subscription will end on {premiumExpiresAt?.toLocaleDateString()}
+                </p>
+              )}
+            </div>
 
             <div className={styles.infoGroup}>
               <div className={styles.infoHeader}>
