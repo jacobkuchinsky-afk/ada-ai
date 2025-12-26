@@ -5,6 +5,7 @@ import gc
 import threading
 import uuid
 import base64
+import traceback
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from datetime import date, datetime, timedelta
@@ -150,7 +151,6 @@ CORS(app, resources={r"/api/*": {
 def handle_exception(e):
     """Handle all uncaught exceptions and return JSON with CORS headers."""
     print(f"[ERROR] Unhandled exception: {e}")
-    import traceback
     traceback.print_exc()
     response = Response(
         json.dumps({"error": "Internal server error", "details": str(e)}),
