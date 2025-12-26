@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import styles from './Sidebar.module.css';
 import { ChatPreview } from '@/lib/chatService';
@@ -42,6 +42,7 @@ export default function Sidebar({
   streamingChatId
 }: SidebarProps) {
   const [hoveredChatId, setHoveredChatId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const { credits, maxCredits, isPremium, isLoading: isLoadingCredits } = useCreditsContext();
 
   const handleDeleteClick = (e: React.MouseEvent, chatId: string) => {
@@ -49,9 +50,68 @@ export default function Sidebar({
     onDeleteChat(chatId);
   };
 
+  // Filter chats based on search query
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return chats;
+    const query = searchQuery.toLowerCase().trim();
+    return chats.filter(chat => 
+      chat.title.toLowerCase().includes(query)
+    );
+  }, [chats, searchQuery]);
+
+  const handleClearSearch = () => {
+    setSearchQuery('');
+  };
+
   return (
     <aside className={styles.sidebar}>
       <div className={styles.topSection}>
+        {/* Search Bar */}
+        <div className={styles.searchContainer}>
+          <svg 
+            className={styles.searchIcon}
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            className={styles.searchInput}
+            placeholder="Search chats..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button 
+              className={styles.clearSearchButton}
+              onClick={handleClearSearch}
+              title="Clear search"
+            >
+              <svg 
+                width="14" 
+                height="14" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+
         <button 
           className={styles.newChatButton} 
           onClick={onNewChat}
@@ -85,8 +145,12 @@ export default function Sidebar({
           <div className={styles.emptyState}>
             <p>No chats yet</p>
           </div>
+        ) : filteredChats.length === 0 ? (
+          <div className={styles.emptyState}>
+            <p>No chats found</p>
+          </div>
         ) : (
-          chats.map((chat) => (
+          filteredChats.map((chat) => (
             <div
               key={chat.id}
               className={`${styles.chatItem} ${currentChatId === chat.id ? styles.active : ''}`}
