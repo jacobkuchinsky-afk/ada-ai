@@ -1,0 +1,1 @@
+{"location": "main.py:startup", "message": "Server starting", "data": {"stripe_imported": true, "firebase_imported": true, "port": 5000}, "timestamp": 1766789460967.3596, "sessionId": "debug-session", "hypothesisId": "A"}
