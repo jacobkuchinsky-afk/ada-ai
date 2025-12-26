@@ -7,7 +7,7 @@ import styles from './Chat.module.css';
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSendMessage: (message: string) => void;
+  onSendMessage: (message: string, fastMode: boolean) => void;
   isLoading: boolean;
   statusMessage?: string;
   onSkipSearch?: () => void;  // Callback to skip searching and go to generation

@@ -189,7 +189,6 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     TASK: Transform the user's question into a single, optimized Google search query.
 
                     REQUIREMENTS:
-                    - Create ONE focused search query (not multiple)
                     - Length: 3-10 words maximum (half to one sentence)
                     - Never use quotation marks (" or ')
                     - Focus on broad, findable information only (not specific tools or deep page content)
@@ -205,11 +204,37 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     - Think about if the given search query would return any use results or if it is to specific, if it is to specific then possibly chop the query into multiple queries.
                     Exceptions:
                     - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
-                    Important: You HEAVILY favor searching for answers over not searching
+                    - Add no searching needed if the users prompt follows one of these: If the users prompt is not a question and it could be answered without the need for fact checking, If the users prompt is conversational like hello, bye, ect.
+        
                     CONTEXT: Current date: {current_date}
 
                     OUTPUT: Return only the search query, nothing else.
 """
+
+search_fast_prompt = f"""You are an expert at converting questions into effective web search queries.
+
+                    TASK: Transform the user's question into a single, optimized Google search query.
+
+                    REQUIREMENTS:
+                    - Create ONE focused search query (not multiple)
+                    - Length: 3-10 words maximum (half to one sentence)
+                    - Never use quotation marks (" or ')
+                    - Focus on broad, findable information only (not specific tools or deep page content)
+                    - The user has asked for the answer to be quick so the depth should be under 5.
+                    - At the end of each search query please add depth<number> to the query to indicate how many sources to search for.
+                    - Example depth: Example: 1 or 2 or 3 or 4 or 5
+                    - For simple searches the number should be VERY small (1 or 2)
+                   
+                    - Make sure the search query will return useful results if it will not as in it is too specific on somehting change the query to something more broad.
+                    Exceptions:
+                    - If the users question is simple enough that there is aboslutly no searching needed to find and fact check the answer then return ONLY '<No searching needed>' exactly and ignore all other questions.
+                    - Add no searching needed if the users prompt follows one of these: If the users prompt is not a question and it could be answered without the need for fact checking, If the users prompt is conversational like hello, bye, ect.
+                    - The user has asked for a fast response, searching takes time so if it is one the line if searching is needed go for not searching.
+                    CONTEXT: Current date: {current_date}
+
+                    OUTPUT: Return only the search query, nothing else.
+"""
+
 
 goodness_decided_prompt = """Job: Decide if the provided data fully answers the user's question.
 
@@ -427,7 +452,7 @@ def compress_memory(memory: list) -> list:
     return new_memory
 
 
-def process_search(prompt, memory, previous_search_data=None, previous_user_question=None, session_id=None):
+def process_search(prompt, memory, previous_search_data=None, previous_user_question=None, session_id=None, fast_mode=False):
     """Process the search workflow and yield status updates and final streaming response.
     
     Args:
@@ -436,6 +461,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         previous_search_data: Raw search data from previous message (for summarization)
         previous_user_question: The user question from previous message (for summarization context)
         session_id: Unique session ID for skip search tracking
+        fast_mode: If True, use faster search prompt and skip goodness loop for quicker responses
     """
     search_data = []
     search_history = []  # Track all searches for frontend
@@ -516,14 +542,16 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         if iter_count > 0 and not service_failure_detected:
             # Only regenerate query if previous search had results but they weren't good enough
             # Don't regenerate if the search service itself is down (that won't help)
+            # In fast mode, this block should never execute since we skip the goodness loop
             query = ai(
                 "User question: " + prompt + " Your original query: " + query + " Failed, please make a new better suited query.",
-                search_prompt, False, researcher
+                search_fast_prompt if fast_mode else search_prompt, False, researcher
             )
         elif iter_count == 0:
+            # Use fast search prompt when fast_mode is enabled (single query, lower depth)
             query = ai(
                 "User question:" + prompt + " Memory: " + str(memory),
-                search_prompt, False, researcher
+                search_fast_prompt if fast_mode else search_prompt, False, researcher
             )
         
         # Clean AI output to remove thinking tags
@@ -709,15 +737,19 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             }
             break
         
-        # Combine search data for evaluation
-        eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
-        good = ai(
-            "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
-            goodness_decided_prompt, False, general
-        )
-        
-        # Clean AI output to remove thinking tags
-        good = clean_ai_output(good)
+        # In fast mode, skip the goodness evaluation entirely - just use first search results
+        if fast_mode:
+            good = "<<<SEARCH_COMPLETE>>>"  # Fake completion to skip loop
+        else:
+            # Combine search data for evaluation
+            eval_search_data = "\n\n---\n\n".join(search_data) if search_data else ""
+            good = ai(
+                "User prompt: " + prompt + "\n\nInformation gathered:\n" + eval_search_data,
+                goodness_decided_prompt, False, general
+            )
+            
+            # Clean AI output to remove thinking tags
+            good = clean_ai_output(good)
         
         # Check for skip request after evaluation AI call (it may take a while) - only in goodness loop
         if in_goodness_loop and session_id and check_skip_search(session_id):
@@ -729,6 +761,12 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
                 "icon": "thinking"
             }
             break
+        
+        # In fast mode, skip the goodness loop entirely after first search
+        if fast_mode:
+            searching = False
+            iter_count += 1
+            continue
         
         # Check for exact markers
         if "<<<NEEDS_MORE_SEARCH>>>" in good:
@@ -824,6 +862,7 @@ def chat():
     previous_search_data = data.get('previousSearchData', None)  # Raw search data from last message
     previous_user_question = data.get('previousUserQuestion', None)  # User question from last message
     session_id = data.get('sessionId', None)  # Session ID for skip search tracking
+    fast_mode = data.get('fastMode', False)  # Fast mode flag for quicker responses
     
     if not message:
         return Response(
@@ -844,7 +883,7 @@ def chat():
             # Send session_id to frontend first so they can use it for skip requests
             yield f"data: {json.dumps({'type': 'session', 'sessionId': session_id})}\n\n"
             
-            for update in process_search(message, memory, previous_search_data, previous_user_question, session_id):
+            for update in process_search(message, memory, previous_search_data, previous_user_question, session_id, fast_mode):
                 yield f"data: {json.dumps(update)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"

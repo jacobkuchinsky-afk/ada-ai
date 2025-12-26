@@ -236,7 +236,7 @@ export default function DashboardPage() {
   );
 
   const handleSendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, fastMode: boolean = false) => {
       if (!user) return;
 
       // Check if user has enough credits (2: 1 for prompt, 1 for reply)
@@ -314,7 +314,7 @@ export default function DashboardPage() {
       
       setMessages(initialMessages);
       setIsLoading(true);
-      setStatusMessage('Connecting...');
+      setStatusMessage(fastMode ? 'Processing (fast mode)...' : 'Connecting...');
 
       try {
         // Get previous search context for summarization
@@ -332,6 +332,7 @@ export default function DashboardPage() {
             memory: getMemory(),
             previousSearchData,
             previousUserQuestion,
+            fastMode,  // Send fast mode flag to backend
           }),
           signal: abortControllerRef.current.signal,
         });
