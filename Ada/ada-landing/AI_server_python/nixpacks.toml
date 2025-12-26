@@ -9,5 +9,5 @@ cmds = [
 ]
 
 [start]
-cmd = "/app/.venv/bin/gunicorn --worker-class gevent --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 60 main:app"
+cmd = "/app/.venv/bin/gunicorn --worker-class gthread --threads 4 --bind 0.0.0.0:$PORT --timeout 120 --graceful-timeout 60 main:app"
 
