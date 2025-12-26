@@ -4,17 +4,18 @@ import { useState, KeyboardEvent } from 'react';
 import styles from './Chat.module.css';
 
 interface ChatInputProps {
-  onSubmit: (message: string, fastMode: boolean) => void;
+  onSubmit: (message: string) => void;
   disabled?: boolean;
+  fastMode: boolean;
+  onToggleFastMode: () => void;
 }
 
-export default function ChatInput({ onSubmit, disabled }: ChatInputProps) {
+export default function ChatInput({ onSubmit, disabled, fastMode, onToggleFastMode }: ChatInputProps) {
   const [message, setMessage] = useState('');
-  const [fastMode, setFastMode] = useState(false);
 
   const handleSubmit = () => {
     if (message.trim() && !disabled) {
-      onSubmit(message.trim(), fastMode);
+      onSubmit(message.trim());
       setMessage('');
     }
   };
@@ -24,10 +25,6 @@ export default function ChatInput({ onSubmit, disabled }: ChatInputProps) {
       e.preventDefault();
       handleSubmit();
     }
-  };
-
-  const toggleFastMode = () => {
-    setFastMode(!fastMode);
   };
 
   return (
@@ -66,7 +63,7 @@ export default function ChatInput({ onSubmit, disabled }: ChatInputProps) {
       <div className={styles.inputActionsRow}>
         <button
           className={`${styles.fastModeButton} ${fastMode ? styles.fastModeActive : ''}`}
-          onClick={toggleFastMode}
+          onClick={onToggleFastMode}
           type="button"
           title={fastMode ? 'Fast mode enabled - quicker responses with less depth' : 'Enable fast mode for quicker responses'}
         >

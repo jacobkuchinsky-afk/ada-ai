@@ -60,6 +60,12 @@ export default function DashboardPage() {
   // Save error state for user feedback
   const [saveError, setSaveError] = useState<string | null>(null);
 
+  // Fast mode state - persists throughout the chat session
+  const [fastMode, setFastMode] = useState(false);
+  const toggleFastMode = useCallback(() => {
+    setFastMode(prev => !prev);
+  }, []);
+
   useEffect(() => {
     if (!loading) {
       if (!user) {
@@ -236,7 +242,7 @@ export default function DashboardPage() {
   );
 
   const handleSendMessage = useCallback(
-    async (content: string, fastMode: boolean = false) => {
+    async (content: string) => {
       if (!user) return;
 
       // Check if user has enough credits (2: 1 for prompt, 1 for reply)
@@ -673,7 +679,7 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     },
-    [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits]
+    [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits, fastMode]
   );
 
   // Handle skip search - tells the backend to stop searching and generate response
@@ -734,6 +740,8 @@ export default function DashboardPage() {
         isLoading={isLoading}
         statusMessage={statusMessage}
         onSkipSearch={handleSkipSearch}
+        fastMode={fastMode}
+        onToggleFastMode={toggleFastMode}
       />
       <OutOfCreditsModal
         isOpen={showOutOfCreditsModal}

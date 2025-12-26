@@ -7,13 +7,15 @@ import styles from './Chat.module.css';
 
 interface ChatInterfaceProps {
   messages: Message[];
-  onSendMessage: (message: string, fastMode: boolean) => void;
+  onSendMessage: (message: string) => void;
   isLoading: boolean;
   statusMessage?: string;
   onSkipSearch?: () => void;  // Callback to skip searching and go to generation
+  fastMode: boolean;
+  onToggleFastMode: () => void;
 }
 
-export default function ChatInterface({ messages, onSendMessage, isLoading, statusMessage, onSkipSearch }: ChatInterfaceProps) {
+export default function ChatInterface({ messages, onSendMessage, isLoading, statusMessage, onSkipSearch, fastMode, onToggleFastMode }: ChatInterfaceProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -32,7 +34,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, stat
         <div className={styles.emptyState}>
           <h1 className={styles.adaTitle}>Ada</h1>
           <div className={styles.centeredInput}>
-            <ChatInput onSubmit={onSendMessage} disabled={isLoading} />
+            <ChatInput onSubmit={onSendMessage} disabled={isLoading} fastMode={fastMode} onToggleFastMode={onToggleFastMode} />
           </div>
         </div>
       </div>
@@ -55,7 +57,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, stat
       </div>
       
       <div className={styles.inputContainer}>
-        <ChatInput onSubmit={onSendMessage} disabled={isLoading} />
+        <ChatInput onSubmit={onSendMessage} disabled={isLoading} fastMode={fastMode} onToggleFastMode={onToggleFastMode} />
       </div>
     </div>
   );
