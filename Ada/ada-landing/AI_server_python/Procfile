@@ -1,2 +1,2 @@
-web: gunicorn --worker-class gevent --bind 0.0.0.0:$PORT main:app
+web: /app/.venv/bin/gunicorn --worker-class gevent --bind 0.0.0.0:$PORT main:app
 
