@@ -74,6 +74,7 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
 
     const apiUrl = `${API_URL}/api/create-checkout`;
     console.log('[Checkout] Calling API:', apiUrl);
+    console.log('[Checkout] User ID:', user.uid);
 
     try {
       const response = await fetch(apiUrl, {
@@ -89,18 +90,30 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
         }),
       });
 
-      const data = await response.json();
-      console.log('[Checkout] Response:', response.status, data);
+      console.log('[Checkout] Response status:', response.status);
+      
+      // Get response text first to debug
+      const responseText = await response.text();
+      console.log('[Checkout] Response text:', responseText);
+      
+      // Try to parse as JSON
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[Checkout] Failed to parse JSON:', parseError);
+        return { success: false, error: `Server returned invalid response: ${responseText.substring(0, 100)}` };
+      }
 
       if (!response.ok) {
-        return { success: false, error: data.error || 'Failed to create checkout session' };
+        return { success: false, error: data.error || `Server error: ${response.status}` };
       }
 
       return { success: true, url: data.url };
     } catch (error) {
-      console.error('[Checkout] Error:', error);
-      console.error('[Checkout] API_URL was:', API_URL);
-      return { success: false, error: `Failed to connect to server (${API_URL})` };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[Checkout] Fetch error:', errorMessage);
+      return { success: false, error: `Connection failed: ${errorMessage}` };
     }
   }, [user]);
 
