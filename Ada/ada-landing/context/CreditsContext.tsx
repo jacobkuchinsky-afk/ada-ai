@@ -5,19 +5,23 @@ import { useAuth } from './AuthContext';
 import {
   getUserCredits,
   useCredits as useCreditsService,
-  upgradeToPremium as upgradeToPremiumService,
   UserCredits,
+  SubscriptionStatus,
 } from '@/lib/creditsService';
+
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 interface CreditsContextType {
   credits: number;
   maxCredits: number;
   isPremium: boolean;
   premiumExpiresAt: Date | null;
+  subscriptionStatus: SubscriptionStatus;
   isLoading: boolean;
   useCredits: (amount: number) => Promise<boolean>;
   refreshCredits: () => Promise<void>;
-  upgradeToPremium: (code: string) => Promise<{ success: boolean; message: string }>;
+  createCheckoutSession: () => Promise<{ success: boolean; url?: string; error?: string }>;
+  cancelSubscription: () => Promise<{ success: boolean; message: string }>;
 }
 
 const CreditsContext = createContext<CreditsContextType | undefined>(undefined);
@@ -65,26 +69,79 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     return success;
   }, [user]);
 
-  const upgradeToPremium = useCallback(async (code: string): Promise<{ success: boolean; message: string }> => {
+  const createCheckoutSession = useCallback(async (): Promise<{ success: boolean; url?: string; error?: string }> => {
+    if (!user) return { success: false, error: 'Not logged in' };
+
+    try {
+      const response = await fetch(`${API_URL}/api/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          email: user.email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, error: data.error || 'Failed to create checkout session' };
+      }
+
+      return { success: true, url: data.url };
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      return { success: false, error: 'Failed to connect to server' };
+    }
+  }, [user]);
+
+  const cancelSubscription = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     if (!user) return { success: false, message: 'Not logged in' };
 
-    const result = await upgradeToPremiumService(user.uid, code);
-    if (result.success) {
-      // Refresh credits to get updated state
+    try {
+      const response = await fetch(`${API_URL}/api/cancel-subscription`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'bypass-tunnel-reminder': 'true',
+          'ngrok-skip-browser-warning': 'true',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return { success: false, message: data.error || 'Failed to cancel subscription' };
+      }
+
+      // Refresh credits to get updated subscription status
       await loadCredits();
+
+      return { success: true, message: data.message || 'Subscription cancelled' };
+    } catch (error) {
+      console.error('Error cancelling subscription:', error);
+      return { success: false, message: 'Failed to connect to server' };
     }
-    return result;
   }, [user, loadCredits]);
 
   const value: CreditsContextType = {
     credits: creditsData?.credits ?? 0,
-    maxCredits: creditsData?.maxCredits ?? 10,
+    maxCredits: creditsData?.maxCredits ?? 20,
     isPremium: creditsData?.isPremium ?? false,
     premiumExpiresAt: creditsData?.premiumExpiresAt ?? null,
+    subscriptionStatus: creditsData?.subscriptionStatus ?? 'none',
     isLoading,
     useCredits,
     refreshCredits,
-    upgradeToPremium,
+    createCheckoutSession,
+    cancelSubscription,
   };
 
   return (
@@ -101,5 +158,3 @@ export function useCreditsContext() {
   }
   return context;
 }
-
-
