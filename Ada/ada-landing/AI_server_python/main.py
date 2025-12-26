@@ -79,11 +79,20 @@ def clean_ai_output(text):
 # Load environment variables
 load_dotenv()
 
-# Initialize Stripe
-stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
-STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
-STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID')
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+# Stripe configuration - loaded lazily to avoid build-time issues
+_stripe_initialized = False
+
+def get_stripe_config():
+    """Get Stripe configuration, initializing if needed."""
+    global _stripe_initialized
+    if not _stripe_initialized:
+        stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
+        _stripe_initialized = True
+    return {
+        'webhook_secret': os.getenv('STRIPE_WEBHOOK_SECRET'),
+        'price_id': os.getenv('STRIPE_PRICE_ID'),
+        'frontend_url': os.getenv('FRONTEND_URL', 'http://localhost:3000')
+    }
 
 # Initialize Firebase Admin SDK
 _firebase_initialized = False
@@ -976,6 +985,9 @@ def skip_search():
 @app.route('/api/create-checkout', methods=['POST'])
 def create_checkout():
     """Create a Stripe Checkout session for premium subscription."""
+    # Initialize Stripe
+    config = get_stripe_config()
+    
     data = request.json
     user_id = data.get('userId')
     user_email = data.get('email')
@@ -1027,12 +1039,12 @@ def create_checkout():
             customer=customer_id,
             payment_method_types=['card'],
             line_items=[{
-                'price': STRIPE_PRICE_ID,
+                'price': config['price_id'],
                 'quantity': 1,
             }],
             mode='subscription',
-            success_url=f"{FRONTEND_URL}/dashboard?payment=success",
-            cancel_url=f"{FRONTEND_URL}/profile?payment=cancelled",
+            success_url=f"{config['frontend_url']}/dashboard?payment=success",
+            cancel_url=f"{config['frontend_url']}/profile?payment=cancelled",
             metadata={
                 'firebaseUserId': user_id
             },
@@ -1071,13 +1083,17 @@ def stripe_webhook():
     payload = request.get_data(as_text=True)
     sig_header = request.headers.get('Stripe-Signature')
     
-    if not STRIPE_WEBHOOK_SECRET:
+    # Get Stripe config
+    config = get_stripe_config()
+    webhook_secret = config['webhook_secret']
+    
+    if not webhook_secret:
         print("Warning: STRIPE_WEBHOOK_SECRET not set")
         return Response(status=400)
     
     try:
         event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
+            payload, sig_header, webhook_secret
         )
     except ValueError as e:
         print(f"Invalid payload: {e}")
@@ -1178,6 +1194,9 @@ def stripe_webhook():
 @app.route('/api/cancel-subscription', methods=['POST'])
 def cancel_subscription():
     """Cancel a user's subscription at the end of the billing period."""
+    # Initialize Stripe
+    get_stripe_config()
+    
     data = request.json
     user_id = data.get('userId')
     
