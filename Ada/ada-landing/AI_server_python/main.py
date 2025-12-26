@@ -1002,16 +1002,9 @@ def skip_search():
 @app.route('/api/create-checkout', methods=['POST'])
 def create_checkout():
     """Create a Stripe Checkout session for premium subscription."""
-    # #region agent log
-    import time as _t; _log_data = {"location":"main.py:create_checkout:entry","message":"create_checkout endpoint called","data":{"method":request.method,"origin":request.headers.get('Origin'),"content_type":request.headers.get('Content-Type')},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"B,C"}
-    with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data)+"\n")
-    # #endregion
+    print(f"[Checkout] Endpoint called - method: {request.method}, origin: {request.headers.get('Origin')}")
     # Initialize Stripe
     config = get_stripe_config()
-    # #region agent log
-    _log_data2 = {"location":"main.py:create_checkout:config","message":"Stripe config loaded","data":{"api_key_set":bool(stripe.api_key),"price_id":config.get('price_id'),"webhook_secret_set":bool(config.get('webhook_secret')),"frontend_url":config.get('frontend_url')},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"D"}
-    with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data2)+"\n")
-    # #endregion
     print(f"[Checkout] Config loaded - API key set: {bool(stripe.api_key)}, Price ID: {config.get('price_id')}")
     
     data = request.json
@@ -1044,42 +1037,45 @@ def create_checkout():
         )
     
     try:
-        # #region agent log
-        _log_data3 = {"location":"main.py:create_checkout:try_block","message":"Entering try block for checkout","data":{"user_id":user_id,"user_email":user_email},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"C,E"}
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data3)+"\n")
-        # #endregion
+        print("[Checkout] Step 1: Entering try block")
         # Check if user already has a Stripe customer ID
         db = get_firestore_db()
-        # #region agent log
-        _log_data4 = {"location":"main.py:create_checkout:firestore","message":"Firestore db obtained","data":{"db_available":db is not None},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"E"}
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data4)+"\n")
-        # #endregion
+        print(f"[Checkout] Step 2: Firestore db obtained - available: {db is not None}")
         existing_customer_id = None
         
         if db:
+            print("[Checkout] Step 3: Querying Firestore for existing customer...")
             user_doc = db.collection('users').document(user_id).get()
+            print(f"[Checkout] Step 3b: Firestore query complete - exists: {user_doc.exists}")
             if user_doc.exists:
                 user_data = user_doc.to_dict()
                 existing_customer_id = user_data.get('stripeCustomerId')
+                print(f"[Checkout] Step 3c: Existing customer ID: {existing_customer_id}")
         
         # Create or reuse customer
         if existing_customer_id:
             customer_id = existing_customer_id
+            print(f"[Checkout] Step 4: Reusing existing Stripe customer: {customer_id}")
         else:
             # Create a new Stripe customer
+            print("[Checkout] Step 4: Creating new Stripe customer...")
             customer_params = {'metadata': {'firebaseUserId': user_id}}
             if user_email:
                 customer_params['email'] = user_email
             customer = stripe.Customer.create(**customer_params)
             customer_id = customer.id
+            print(f"[Checkout] Step 4b: Stripe customer created: {customer_id}")
             
             # Store customer ID in Firestore
             if db:
+                print("[Checkout] Step 4c: Storing customer ID in Firestore...")
                 db.collection('users').document(user_id).set({
                     'stripeCustomerId': customer_id
                 }, merge=True)
+                print("[Checkout] Step 4d: Customer ID stored in Firestore")
         
         # Create Checkout session
+        print("[Checkout] Step 5: Creating Stripe checkout session...")
         checkout_session = stripe.checkout.Session.create(
             customer=customer_id,
             payment_method_types=['card'],
@@ -1100,10 +1096,7 @@ def create_checkout():
             }
         )
         
-        # #region agent log
-        _log_data5 = {"location":"main.py:create_checkout:success","message":"Checkout session created successfully","data":{"session_id":checkout_session.id,"has_url":bool(checkout_session.url)},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"C"}
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data5)+"\n")
-        # #endregion
+        print(f"[Checkout] Step 6: Checkout session created! URL: {checkout_session.url[:50]}...")
         return Response(
             json.dumps({"url": checkout_session.url, "sessionId": checkout_session.id}),
             status=200,
@@ -1111,22 +1104,16 @@ def create_checkout():
         )
         
     except stripe.error.StripeError as e:
-        # #region agent log
-        _log_data6 = {"location":"main.py:create_checkout:stripe_error","message":"Stripe error occurred","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"C,D"}
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data6)+"\n")
-        # #endregion
-        print(f"Stripe error: {e}")
+        print(f"[Checkout] ERROR - Stripe error: {type(e).__name__}: {e}")
         return Response(
             json.dumps({"error": str(e)}),
             status=400,
             mimetype='application/json'
         )
     except Exception as e:
-        # #region agent log
-        _log_data7 = {"location":"main.py:create_checkout:generic_error","message":"Generic error in checkout","data":{"error":str(e),"error_type":type(e).__name__},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"C,E"}
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data7)+"\n")
-        # #endregion
-        print(f"Error creating checkout session: {e}")
+        import traceback
+        print(f"[Checkout] ERROR - Exception: {type(e).__name__}: {e}")
+        print(f"[Checkout] Traceback: {traceback.format_exc()}")
         return Response(
             json.dumps({"error": "Failed to create checkout session"}),
             status=500,
@@ -1345,13 +1332,7 @@ def health():
 
 
 if __name__ == '__main__':
-    # #region agent log
-    import time as _t
-    _log_data = {"location":"main.py:startup","message":"Server starting","data":{"stripe_imported":True,"firebase_imported":True,"port":int(os.getenv('PORT', 5000))},"timestamp":_t.time()*1000,"sessionId":"debug-session","hypothesisId":"A"}
-    try:
-        with open(r"c:\Users\jacob\Downloads\Ada\.cursor\debug.log", "a") as _f: _f.write(__import__('json').dumps(_log_data)+"\n")
-    except: pass
-    # #endregion
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    print(f"[Startup] Server starting on port {port}, debug={debug}")
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
