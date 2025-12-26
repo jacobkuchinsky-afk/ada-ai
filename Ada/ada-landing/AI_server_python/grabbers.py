@@ -9,6 +9,7 @@ import re
 try:
     from ddgs import DDGS
     USE_DDGS = True
+    print("DDGS search enabled")
 except ImportError:
     USE_DDGS = False
     print("Warning: ddgs not installed, falling back to HTML scraping")
