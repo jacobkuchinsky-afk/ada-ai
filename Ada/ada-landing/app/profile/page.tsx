@@ -8,6 +8,8 @@ import { useCreditsContext } from '@/context/CreditsContext';
 import { formatPremiumExpiry } from '@/lib/creditsService';
 import styles from './profile.module.css';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+
 export default function ProfilePage() {
   const { user, loading, logout, updateUsername } = useAuth();
   const { credits, maxCredits, isPremium, premiumExpiresAt } = useCreditsContext();
@@ -17,6 +19,7 @@ export default function ProfilePage() {
   const [updateLoading, setUpdateLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -33,6 +36,40 @@ export default function ProfilePage() {
   const handleLogout = async () => {
     await logout();
     router.push('/');
+  };
+
+  const handleUpgradeToPremium = async () => {
+    if (!user) return;
+    
+    setUpgradeLoading(true);
+    setError('');
+    
+    try {
+      const response = await fetch(`${API_URL}/api/create-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          email: user.email,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (data.url) {
+        // Redirect to Stripe checkout
+        window.location.href = data.url;
+      } else {
+        setError(data.error || 'Failed to start checkout');
+      }
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setError('Failed to connect to payment service');
+    } finally {
+      setUpgradeLoading(false);
+    }
   };
 
   const handleEditUsername = () => {
@@ -141,6 +178,15 @@ export default function ProfilePage() {
                 <p className={styles.premiumExpiry}>
                   {formatPremiumExpiry(premiumExpiresAt)}
                 </p>
+              )}
+              {!isPremium && (
+                <button 
+                  onClick={handleUpgradeToPremium} 
+                  className={styles.upgradeButton}
+                  disabled={upgradeLoading}
+                >
+                  {upgradeLoading ? 'Loading...' : 'Upgrade to Premium'}
+                </button>
               )}
             </div>
 

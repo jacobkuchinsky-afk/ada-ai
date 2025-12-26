@@ -192,7 +192,33 @@
   margin: 8px 0 0 0;
 }
 
-/* Code Entry Form */
+.upgradeButton {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 20px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.upgradeButton:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.upgradeButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Code Entry Form - kept for backwards compatibility */
 .codeForm {
   display: flex;
   gap: 8px;
