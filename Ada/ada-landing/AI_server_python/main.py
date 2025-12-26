@@ -1157,25 +1157,41 @@ def stripe_webhook():
     try:
         if event_type == 'checkout.session.completed':
             session = event['data']['object']
+            print(f"[Webhook] checkout.session.completed - session keys: {list(session.keys())}")
+            print(f"[Webhook] metadata: {session.get('metadata')}")
+            
             user_id = session.get('metadata', {}).get('firebaseUserId')
             subscription_id = session.get('subscription')
             customer_id = session.get('customer')
             
-            if user_id and subscription_id:
+            print(f"[Webhook] user_id: {user_id}, subscription_id: {subscription_id}, customer_id: {customer_id}")
+            
+            if not user_id:
+                print(f"[Webhook] ERROR: No firebaseUserId in metadata!")
+                return Response(json.dumps({"error": "No user ID in metadata"}), status=400, mimetype='application/json')
+            
+            if subscription_id:
                 # Get subscription details for the period end
+                print(f"[Webhook] Retrieving subscription {subscription_id}...")
                 subscription = stripe.Subscription.retrieve(subscription_id)
                 period_end = datetime.fromtimestamp(subscription.current_period_end)
-                
-                # Update user to premium
-                db.collection('users').document(user_id).set({
-                    'isPremium': True,
-                    'premiumExpiresAt': period_end,
-                    'stripeCustomerId': customer_id,
-                    'stripeSubscriptionId': subscription_id,
-                    'subscriptionStatus': 'active',
-                    'credits': 200,  # Give them premium credits immediately
-                }, merge=True)
-                print(f"User {user_id} upgraded to premium, expires {period_end}")
+                print(f"[Webhook] Subscription retrieved, period_end: {period_end}")
+            else:
+                # No subscription yet (might be a one-time payment or subscription pending)
+                print(f"[Webhook] No subscription_id, using 30 days from now")
+                period_end = datetime.now() + timedelta(days=30)
+            
+            # Update user to premium
+            print(f"[Webhook] Updating Firestore for user {user_id}...")
+            db.collection('users').document(user_id).set({
+                'isPremium': True,
+                'premiumExpiresAt': period_end,
+                'stripeCustomerId': customer_id,
+                'stripeSubscriptionId': subscription_id,
+                'subscriptionStatus': 'active',
+                'credits': 200,  # Give them premium credits immediately
+            }, merge=True)
+            print(f"[Webhook] User {user_id} upgraded to premium, expires {period_end}")
         
         elif event_type == 'customer.subscription.updated':
             subscription = event['data']['object']
@@ -1231,8 +1247,10 @@ def stripe_webhook():
         return Response(json.dumps({"received": True}), status=200, mimetype='application/json')
         
     except Exception as e:
-        print(f"Error processing webhook: {e}")
-        return Response(status=500)
+        import traceback
+        print(f"[Webhook] ERROR processing webhook: {type(e).__name__}: {e}")
+        print(f"[Webhook] Traceback: {traceback.format_exc()}")
+        return Response(json.dumps({"error": str(e)}), status=500, mimetype='application/json')
 
 
 @app.route('/api/cancel-subscription', methods=['POST'])
