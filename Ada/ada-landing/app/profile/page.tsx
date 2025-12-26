@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -8,7 +8,7 @@ import { useCreditsContext } from '@/context/CreditsContext';
 import { formatPremiumExpiry } from '@/lib/creditsService';
 import styles from './profile.module.css';
 
-export default function ProfilePage() {
+function ProfileContent() {
   const { user, loading, logout, updateUsername } = useAuth();
   const { 
     credits, 
@@ -365,5 +365,25 @@ export default function ProfilePage() {
         </div>
       </div>
     </main>
+  );
+}
+
+// Loading fallback for Suspense
+function ProfileLoading() {
+  return (
+    <main className={styles.main}>
+      <div className={styles.loading}>
+        <div className={styles.spinner}></div>
+      </div>
+    </main>
+  );
+}
+
+// Main export wrapped in Suspense for useSearchParams
+export default function ProfilePage() {
+  return (
+    <Suspense fallback={<ProfileLoading />}>
+      <ProfileContent />
+    </Suspense>
   );
 }
