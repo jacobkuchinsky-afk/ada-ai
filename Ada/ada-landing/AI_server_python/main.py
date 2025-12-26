@@ -1174,7 +1174,9 @@ def stripe_webhook():
                 # Get subscription details for the period end
                 print(f"[Webhook] Retrieving subscription {subscription_id}...")
                 subscription = stripe.Subscription.retrieve(subscription_id)
-                period_end = datetime.fromtimestamp(subscription.current_period_end)
+                # Use dictionary access for Stripe objects (required in newer SDK versions)
+                period_end_timestamp = subscription['current_period_end']
+                period_end = datetime.fromtimestamp(period_end_timestamp)
                 print(f"[Webhook] Subscription retrieved, period_end: {period_end}")
             else:
                 # No subscription yet (might be a one-time payment or subscription pending)
@@ -1200,7 +1202,7 @@ def stripe_webhook():
             if user_id:
                 cancel_at_period_end = subscription.get('cancel_at_period_end', False)
                 status = subscription.get('status')
-                period_end = datetime.fromtimestamp(subscription.current_period_end)
+                period_end = datetime.fromtimestamp(subscription.get('current_period_end'))
                 
                 update_data = {
                     'premiumExpiresAt': period_end,
@@ -1243,7 +1245,7 @@ def stripe_webhook():
                 user_id = subscription.get('metadata', {}).get('firebaseUserId')
                 
                 if user_id:
-                    period_end = datetime.fromtimestamp(subscription.current_period_end)
+                    period_end = datetime.fromtimestamp(subscription['current_period_end'])
                     
                     # Renew premium: extend expiration and reset credits
                     db.collection('users').document(user_id).set({
@@ -1336,7 +1338,7 @@ def cancel_subscription():
         )
         
         # Update Firestore
-        period_end = datetime.fromtimestamp(subscription.current_period_end)
+        period_end = datetime.fromtimestamp(subscription['current_period_end'])
         db.collection('users').document(user_id).set({
             'subscriptionStatus': 'cancelling',
             'premiumExpiresAt': period_end,
