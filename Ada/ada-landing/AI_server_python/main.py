@@ -1229,6 +1229,31 @@ def stripe_webhook():
                 }, merge=True)
                 print(f"User {user_id} subscription cancelled, premium removed")
         
+        elif event_type == 'invoice.paid':
+            # Handles subscription renewals - fires when monthly payment succeeds
+            invoice = event['data']['object']
+            subscription_id = invoice.get('subscription')
+            billing_reason = invoice.get('billing_reason')  # 'subscription_cycle' for renewals
+            
+            print(f"[Webhook] invoice.paid - subscription_id: {subscription_id}, billing_reason: {billing_reason}")
+            
+            if subscription_id:
+                # Get subscription to find user and period end
+                subscription = stripe.Subscription.retrieve(subscription_id)
+                user_id = subscription.get('metadata', {}).get('firebaseUserId')
+                
+                if user_id:
+                    period_end = datetime.fromtimestamp(subscription.current_period_end)
+                    
+                    # Renew premium: extend expiration and reset credits
+                    db.collection('users').document(user_id).set({
+                        'isPremium': True,
+                        'premiumExpiresAt': period_end,
+                        'subscriptionStatus': 'active',
+                        'credits': 200,  # Reset to premium daily limit on renewal
+                    }, merge=True)
+                    print(f"[Webhook] User {user_id} subscription renewed until {period_end}, credits reset to 200")
+        
         elif event_type == 'invoice.payment_failed':
             invoice = event['data']['object']
             subscription_id = invoice.get('subscription')
@@ -1242,7 +1267,7 @@ def stripe_webhook():
                     db.collection('users').document(user_id).set({
                         'subscriptionStatus': 'payment_failed',
                     }, merge=True)
-                    print(f"User {user_id} payment failed")
+                    print(f"[Webhook] User {user_id} payment failed")
         
         return Response(json.dumps({"received": True}), status=200, mimetype='application/json')
         
