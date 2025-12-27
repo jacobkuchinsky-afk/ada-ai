@@ -1173,11 +1173,20 @@ def stripe_webhook():
             if subscription_id:
                 # Get subscription details for the period end
                 print(f"[Webhook] Retrieving subscription {subscription_id}...")
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                # Use dictionary access for Stripe objects (required in newer SDK versions)
-                period_end_timestamp = subscription['current_period_end']
-                period_end = datetime.fromtimestamp(period_end_timestamp)
-                print(f"[Webhook] Subscription retrieved, period_end: {period_end}")
+                try:
+                    subscription = stripe.Subscription.retrieve(subscription_id)
+                    # Convert to dict for reliable access (required in Stripe SDK v7+)
+                    sub_data = dict(subscription)
+                    period_end_timestamp = sub_data.get('current_period_end')
+                    if period_end_timestamp:
+                        period_end = datetime.fromtimestamp(period_end_timestamp)
+                        print(f"[Webhook] Subscription retrieved, period_end: {period_end}")
+                    else:
+                        print(f"[Webhook] No current_period_end in subscription, using 30 days from now")
+                        period_end = datetime.now() + timedelta(days=30)
+                except Exception as sub_error:
+                    print(f"[Webhook] Error retrieving subscription: {sub_error}, using 30 days from now")
+                    period_end = datetime.now() + timedelta(days=30)
             else:
                 # No subscription yet (might be a one-time payment or subscription pending)
                 print(f"[Webhook] No subscription_id, using 30 days from now")
@@ -1197,12 +1206,14 @@ def stripe_webhook():
         
         elif event_type == 'customer.subscription.updated':
             subscription = event['data']['object']
-            user_id = subscription.get('metadata', {}).get('firebaseUserId')
+            metadata = subscription.get('metadata', {}) or {}
+            user_id = metadata.get('firebaseUserId')
             
             if user_id:
                 cancel_at_period_end = subscription.get('cancel_at_period_end', False)
                 status = subscription.get('status')
-                period_end = datetime.fromtimestamp(subscription.get('current_period_end'))
+                period_end_timestamp = subscription.get('current_period_end')
+                period_end = datetime.fromtimestamp(period_end_timestamp) if period_end_timestamp else datetime.now() + timedelta(days=30)
                 
                 update_data = {
                     'premiumExpiresAt': period_end,
@@ -1220,7 +1231,8 @@ def stripe_webhook():
         
         elif event_type == 'customer.subscription.deleted':
             subscription = event['data']['object']
-            user_id = subscription.get('metadata', {}).get('firebaseUserId')
+            metadata = subscription.get('metadata', {}) or {}
+            user_id = metadata.get('firebaseUserId')
             
             if user_id:
                 # Subscription ended - remove premium
@@ -1241,20 +1253,28 @@ def stripe_webhook():
             
             if subscription_id:
                 # Get subscription to find user and period end
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                user_id = subscription.get('metadata', {}).get('firebaseUserId')
-                
-                if user_id:
-                    period_end = datetime.fromtimestamp(subscription['current_period_end'])
+                try:
+                    subscription = stripe.Subscription.retrieve(subscription_id)
+                    sub_data = dict(subscription)
+                    metadata = sub_data.get('metadata', {}) or {}
+                    user_id = metadata.get('firebaseUserId')
                     
-                    # Renew premium: extend expiration and reset credits
-                    db.collection('users').document(user_id).set({
-                        'isPremium': True,
-                        'premiumExpiresAt': period_end,
-                        'subscriptionStatus': 'active',
-                        'credits': 200,  # Reset to premium daily limit on renewal
-                    }, merge=True)
-                    print(f"[Webhook] User {user_id} subscription renewed until {period_end}, credits reset to 200")
+                    if user_id:
+                        period_end_timestamp = sub_data.get('current_period_end')
+                        period_end = datetime.fromtimestamp(period_end_timestamp) if period_end_timestamp else datetime.now() + timedelta(days=30)
+                        
+                        # Renew premium: extend expiration and reset credits
+                        db.collection('users').document(user_id).set({
+                            'isPremium': True,
+                            'premiumExpiresAt': period_end,
+                            'subscriptionStatus': 'active',
+                            'credits': 200,  # Reset to premium daily limit on renewal
+                        }, merge=True)
+                        print(f"[Webhook] User {user_id} subscription renewed until {period_end}, credits reset to 200")
+                    else:
+                        print(f"[Webhook] invoice.paid - No firebaseUserId in subscription metadata")
+                except Exception as sub_error:
+                    print(f"[Webhook] invoice.paid - Error retrieving subscription: {sub_error}")
         
         elif event_type == 'invoice.payment_failed':
             invoice = event['data']['object']
@@ -1262,14 +1282,21 @@ def stripe_webhook():
             
             if subscription_id:
                 # Get user ID from subscription metadata
-                subscription = stripe.Subscription.retrieve(subscription_id)
-                user_id = subscription.get('metadata', {}).get('firebaseUserId')
-                
-                if user_id:
-                    db.collection('users').document(user_id).set({
-                        'subscriptionStatus': 'payment_failed',
-                    }, merge=True)
-                    print(f"[Webhook] User {user_id} payment failed")
+                try:
+                    subscription = stripe.Subscription.retrieve(subscription_id)
+                    sub_data = dict(subscription)
+                    metadata = sub_data.get('metadata', {}) or {}
+                    user_id = metadata.get('firebaseUserId')
+                    
+                    if user_id:
+                        db.collection('users').document(user_id).set({
+                            'subscriptionStatus': 'payment_failed',
+                        }, merge=True)
+                        print(f"[Webhook] User {user_id} payment failed")
+                    else:
+                        print(f"[Webhook] invoice.payment_failed - No firebaseUserId in subscription metadata")
+                except Exception as sub_error:
+                    print(f"[Webhook] invoice.payment_failed - Error retrieving subscription: {sub_error}")
         
         return Response(json.dumps({"received": True}), status=200, mimetype='application/json')
         
@@ -1337,8 +1364,11 @@ def cancel_subscription():
             cancel_at_period_end=True
         )
         
-        # Update Firestore
-        period_end = datetime.fromtimestamp(subscription['current_period_end'])
+        # Update Firestore - convert Stripe object to dict for reliable access
+        sub_data = dict(subscription)
+        period_end_timestamp = sub_data.get('current_period_end')
+        period_end = datetime.fromtimestamp(period_end_timestamp) if period_end_timestamp else datetime.now() + timedelta(days=30)
+        
         db.collection('users').document(user_id).set({
             'subscriptionStatus': 'cancelling',
             'premiumExpiresAt': period_end,
