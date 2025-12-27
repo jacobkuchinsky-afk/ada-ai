@@ -8,7 +8,7 @@ import Logo from '@/components/Logo/Logo';
 import styles from './verify-email.module.css';
 
 export default function VerifyEmailPage() {
-  const { user, loading, resendVerificationEmail, logout } = useAuth();
+  const { user, loading, resendVerificationEmail, logout, checkWaitlistStatus } = useAuth();
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const [error, setError] = useState('');
@@ -21,8 +21,28 @@ export default function VerifyEmailPage() {
       return;
     }
 
+    const handleVerified = async () => {
+      if (!user) return;
+      
+      // Check if user is on waitlist
+      const pendingWaitlist = sessionStorage.getItem('pendingWaitlist');
+      if (pendingWaitlist === 'true') {
+        sessionStorage.removeItem('pendingWaitlist');
+        router.push('/waitlist');
+        return;
+      }
+      
+      // Double-check with API
+      const status = await checkWaitlistStatus(user.uid);
+      if (status.onWaitlist) {
+        router.push('/waitlist');
+      } else {
+        router.push('/dashboard');
+      }
+    };
+
     if (user?.emailVerified) {
-      router.push('/dashboard');
+      handleVerified();
       return;
     }
 
@@ -31,13 +51,13 @@ export default function VerifyEmailPage() {
       if (user) {
         await user.reload();
         if (user.emailVerified) {
-          router.push('/dashboard');
+          handleVerified();
         }
       }
     }, 3000);
 
     return () => clearInterval(interval);
-  }, [user, loading, router]);
+  }, [user, loading, router, checkWaitlistStatus]);
 
   const handleResend = async () => {
     setResendLoading(true);

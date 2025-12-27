@@ -1,0 +1,292 @@
+.main {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1;
+}
+
+.card {
+  width: 100%;
+  max-width: 440px;
+  padding: 48px 40px;
+  background: rgba(18, 18, 18, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  backdrop-filter: blur(12px);
+  text-align: center;
+}
+
+.iconContainer {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 50%;
+}
+
+.icon {
+  width: 40px;
+  height: 40px;
+  color: #ffc107;
+}
+
+.title {
+  font-family: var(--font-coiny), cursive;
+  font-size: 28px;
+  font-weight: 400;
+  color: var(--foreground);
+  margin-bottom: 12px;
+}
+
+.message {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 24px;
+  font-weight: 500;
+}
+
+.positionContainer {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.positionNumber {
+  font-family: var(--font-coiny), cursive;
+  font-size: 64px;
+  font-weight: 400;
+  color: #ffc107;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.positionLabel {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.statsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.statValue {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--foreground);
+}
+
+.statLabel {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.statDivider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.instruction {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 28px;
+  font-weight: 500;
+}
+
+.error {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: #ff6b6b;
+  text-align: center;
+  padding: 12px;
+  background: rgba(255, 107, 107, 0.1);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.skipSection {
+  background: linear-gradient(135deg, rgba(255, 193, 7, 0.08) 0%, rgba(255, 152, 0, 0.08) 100%);
+  border: 1px solid rgba(255, 193, 7, 0.2);
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.skipText {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--foreground);
+  margin-bottom: 16px;
+}
+
+.upgradeButton {
+  width: 100%;
+  padding: 14px 24px;
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  color: #000;
+  background: linear-gradient(180deg, #ffc107 0%, #ff9800 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  
+  /* 3D effect */
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    0 4px 8px rgba(255, 152, 0, 0.3),
+    0 8px 24px rgba(255, 152, 0, 0.2),
+    0 2px 4px rgba(0, 0, 0, 0.25);
+  
+  transform: translateY(0) perspective(1000px) rotateX(0deg);
+}
+
+.upgradeButton:hover:not(:disabled) {
+  transform: translateY(-2px) perspective(1000px) rotateX(2deg);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.1),
+    0 8px 16px rgba(255, 152, 0, 0.35),
+    0 16px 32px rgba(255, 152, 0, 0.2),
+    0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.upgradeButton:active:not(:disabled) {
+  transform: translateY(2px) perspective(1000px) rotateX(-1deg);
+  box-shadow: 
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 0 2px 6px rgba(0, 0, 0, 0.15),
+    0 1px 2px rgba(255, 152, 0, 0.3),
+    0 2px 8px rgba(255, 152, 0, 0.15);
+}
+
+.upgradeButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.premiumPerks {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 12px;
+  color: rgba(255, 193, 7, 0.8);
+  margin-top: 12px;
+  margin-bottom: 0;
+  font-weight: 500;
+}
+
+.logoutButton {
+  background: none;
+  border: none;
+  font-family: var(--font-ubuntu), sans-serif;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: opacity 0.2s ease;
+  padding: 8px 16px;
+}
+
+.logoutButton:hover {
+  opacity: 0.8;
+  color: var(--foreground);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: #ffc107;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.buttonSpinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: 36px 24px;
+    border-radius: 16px;
+  }
+  
+  .title {
+    font-size: 24px;
+  }
+  
+  .positionNumber {
+    font-size: 48px;
+  }
+  
+  .statsRow {
+    gap: 16px;
+  }
+}
+

@@ -1192,6 +1192,13 @@ def stripe_webhook():
                 print(f"[Webhook] No subscription_id, using 30 days from now")
                 period_end = datetime.now() + timedelta(days=30)
             
+            # Check if user was on waitlist (buying premium to skip)
+            user_doc = db.collection('users').document(user_id).get()
+            was_on_waitlist = False
+            if user_doc.exists:
+                user_data = user_doc.to_dict()
+                was_on_waitlist = user_data.get('onWaitlist', False)
+            
             # Update user to premium
             print(f"[Webhook] Updating Firestore for user {user_id}...")
             db.collection('users').document(user_id).set({
@@ -1201,8 +1208,28 @@ def stripe_webhook():
                 'stripeSubscriptionId': subscription_id,
                 'subscriptionStatus': 'active',
                 'credits': 200,  # Give them premium credits immediately
+                'onWaitlist': False,  # Remove from waitlist if they were on it
+                'registeredAsFree': False,  # No longer a free user
             }, merge=True)
             print(f"[Webhook] User {user_id} upgraded to premium, expires {period_end}")
+            
+            # Update user counts
+            if was_on_waitlist:
+                # Remove from waitlist collection
+                db.collection('waitlist').document(user_id).delete()
+                increment_user_count('waitlistUsers', -1)
+                print(f"[Webhook] User {user_id} removed from waitlist (bought premium to skip)")
+            else:
+                # Was a free user, decrement free count
+                increment_user_count('freeUsers', -1)
+            
+            # Increment premium count
+            increment_user_count('premiumUsers', 1)
+            
+            # Release users from waitlist (each premium user allows 60 more free users)
+            released = release_users_from_waitlist(FREE_TO_PREMIUM_RATIO)
+            if released > 0:
+                print(f"[Webhook] Released {released} users from waitlist due to new premium user")
         
         elif event_type == 'customer.subscription.updated':
             subscription = event['data']['object']
@@ -1240,8 +1267,13 @@ def stripe_webhook():
                     'isPremium': False,
                     'subscriptionStatus': 'cancelled',
                     'stripeSubscriptionId': None,
+                    'registeredAsFree': True,  # They become a free user again
                 }, merge=True)
                 print(f"User {user_id} subscription cancelled, premium removed")
+                
+                # Update counts: -1 premium, +1 free
+                increment_user_count('premiumUsers', -1)
+                increment_user_count('freeUsers', 1)
         
         elif event_type == 'invoice.paid':
             # Handles subscription renewals - fires when monthly payment succeeds
@@ -1395,6 +1427,432 @@ def cancel_subscription():
         print(f"Error cancelling subscription: {e}")
         return Response(
             json.dumps({"error": "Failed to cancel subscription"}),
+            status=500,
+            mimetype='application/json'
+        )
+
+
+# Waitlist configuration
+FREE_TO_PREMIUM_RATIO = 60  # 60 free users per 1 premium user
+
+
+def get_waitlist_stats():
+    """Get current user counts for waitlist calculation.
+    
+    Returns:
+        dict with free_users, premium_users, waitlist_users, and capacity
+    """
+    db = get_firestore_db()
+    if not db:
+        return None
+    
+    try:
+        # Get stats document or create if doesn't exist
+        stats_ref = db.collection('system').document('stats')
+        stats_doc = stats_ref.get()
+        
+        if stats_doc.exists:
+            data = stats_doc.to_dict()
+            free_users = data.get('freeUsers', 0)
+            premium_users = data.get('premiumUsers', 0)
+            waitlist_users = data.get('waitlistUsers', 0)
+        else:
+            # Initialize stats document
+            stats_ref.set({
+                'freeUsers': 0,
+                'premiumUsers': 0,
+                'waitlistUsers': 0
+            })
+            free_users = 0
+            premium_users = 0
+            waitlist_users = 0
+        
+        # Calculate available capacity: premium_users * 60 - free_users
+        capacity = (premium_users * FREE_TO_PREMIUM_RATIO) - free_users
+        
+        return {
+            'freeUsers': free_users,
+            'premiumUsers': premium_users,
+            'waitlistUsers': waitlist_users,
+            'capacity': max(0, capacity)
+        }
+    except Exception as e:
+        print(f"Error getting waitlist stats: {e}")
+        return None
+
+
+def increment_user_count(user_type: str, amount: int = 1):
+    """Increment a user count in the stats document.
+    
+    Args:
+        user_type: 'freeUsers', 'premiumUsers', or 'waitlistUsers'
+        amount: Amount to increment (can be negative to decrement)
+    """
+    db = get_firestore_db()
+    if not db:
+        return False
+    
+    try:
+        stats_ref = db.collection('system').document('stats')
+        from google.cloud.firestore import Increment
+        stats_ref.update({user_type: Increment(amount)})
+        return True
+    except Exception as e:
+        print(f"Error updating {user_type}: {e}")
+        # Try to create the document if it doesn't exist
+        try:
+            stats_ref = db.collection('system').document('stats')
+            stats_ref.set({
+                'freeUsers': amount if user_type == 'freeUsers' else 0,
+                'premiumUsers': amount if user_type == 'premiumUsers' else 0,
+                'waitlistUsers': amount if user_type == 'waitlistUsers' else 0
+            })
+            return True
+        except:
+            return False
+
+
+def release_users_from_waitlist(count: int):
+    """Release users from the waitlist when capacity opens up.
+    
+    Args:
+        count: Number of users to release
+        
+    Returns:
+        Number of users actually released
+    """
+    db = get_firestore_db()
+    if not db or count <= 0:
+        return 0
+    
+    try:
+        # Get the oldest users on the waitlist
+        waitlist_query = (db.collection('waitlist')
+                         .order_by('joinedAt')
+                         .limit(count))
+        waitlist_docs = waitlist_query.get()
+        
+        released = 0
+        for doc in waitlist_docs:
+            user_id = doc.id
+            user_data = doc.to_dict()
+            
+            # Update user document - remove from waitlist
+            db.collection('users').document(user_id).set({
+                'onWaitlist': False,
+                'waitlistReleasedAt': datetime.now()
+            }, merge=True)
+            
+            # Delete from waitlist collection
+            doc.reference.delete()
+            
+            # Update counts
+            increment_user_count('waitlistUsers', -1)
+            increment_user_count('freeUsers', 1)
+            
+            released += 1
+            print(f"[Waitlist] Released user {user_id} from waitlist")
+        
+        return released
+    except Exception as e:
+        print(f"Error releasing users from waitlist: {e}")
+        return 0
+
+
+@app.route('/api/check-waitlist', methods=['POST'])
+def check_waitlist():
+    """Check if a new user should be put on the waitlist.
+    
+    This should be called during signup to determine if the user
+    has capacity to join or should be waitlisted.
+    """
+    data = request.json
+    user_id = data.get('userId') if data else None
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    db = get_firestore_db()
+    if not db:
+        # If database unavailable, allow user (fail open)
+        return Response(
+            json.dumps({
+                "shouldWaitlist": False,
+                "reason": "Database unavailable, allowing access"
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+    
+    try:
+        stats = get_waitlist_stats()
+        if not stats:
+            return Response(
+                json.dumps({"shouldWaitlist": False, "reason": "Could not get stats"}),
+                status=200,
+                mimetype='application/json'
+            )
+        
+        # Check if there's capacity
+        has_capacity = stats['capacity'] > 0 or stats['premiumUsers'] > 0 or (stats['freeUsers'] < FREE_TO_PREMIUM_RATIO and stats['premiumUsers'] == 0)
+        
+        # Special case: Allow first 60 free users even without premium users
+        if stats['premiumUsers'] == 0 and stats['freeUsers'] < FREE_TO_PREMIUM_RATIO:
+            has_capacity = True
+        
+        return Response(
+            json.dumps({
+                "shouldWaitlist": not has_capacity,
+                "capacity": stats['capacity'],
+                "freeUsers": stats['freeUsers'],
+                "premiumUsers": stats['premiumUsers'],
+                "waitlistUsers": stats['waitlistUsers'],
+                "ratio": FREE_TO_PREMIUM_RATIO
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error checking waitlist: {e}")
+        return Response(
+            json.dumps({"shouldWaitlist": False, "error": str(e)}),
+            status=200,
+            mimetype='application/json'
+        )
+
+
+@app.route('/api/join-waitlist', methods=['POST'])
+def join_waitlist():
+    """Add a user to the waitlist."""
+    data = request.json
+    user_id = data.get('userId') if data else None
+    email = data.get('email') if data else None
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    db = get_firestore_db()
+    if not db:
+        return Response(
+            json.dumps({"error": "Database unavailable"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    try:
+        # Check if user is already on waitlist
+        waitlist_doc = db.collection('waitlist').document(user_id).get()
+        if waitlist_doc.exists:
+            # Get their position
+            position = get_waitlist_position(user_id)
+            return Response(
+                json.dumps({
+                    "success": True,
+                    "alreadyOnWaitlist": True,
+                    "position": position
+                }),
+                status=200,
+                mimetype='application/json'
+            )
+        
+        # Add to waitlist collection
+        db.collection('waitlist').document(user_id).set({
+            'email': email,
+            'joinedAt': datetime.now(),
+            'userId': user_id
+        })
+        
+        # Update user document
+        db.collection('users').document(user_id).set({
+            'onWaitlist': True,
+            'waitlistJoinedAt': datetime.now()
+        }, merge=True)
+        
+        # Increment waitlist count
+        increment_user_count('waitlistUsers', 1)
+        
+        # Get position
+        position = get_waitlist_position(user_id)
+        
+        return Response(
+            json.dumps({
+                "success": True,
+                "position": position
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error joining waitlist: {e}")
+        return Response(
+            json.dumps({"error": str(e)}),
+            status=500,
+            mimetype='application/json'
+        )
+
+
+def get_waitlist_position(user_id: str) -> int:
+    """Get a user's position in the waitlist.
+    
+    Returns:
+        Position number (1-indexed), or 0 if not on waitlist
+    """
+    db = get_firestore_db()
+    if not db:
+        return 0
+    
+    try:
+        # Get user's join time
+        user_doc = db.collection('waitlist').document(user_id).get()
+        if not user_doc.exists:
+            return 0
+        
+        user_joined_at = user_doc.to_dict().get('joinedAt')
+        if not user_joined_at:
+            return 0
+        
+        # Count users who joined before this user
+        earlier_users = (db.collection('waitlist')
+                        .where('joinedAt', '<', user_joined_at)
+                        .count()
+                        .get())
+        
+        position = earlier_users[0][0].value + 1  # 1-indexed
+        return position
+    except Exception as e:
+        print(f"Error getting waitlist position: {e}")
+        return 0
+
+
+@app.route('/api/waitlist-status', methods=['POST'])
+def waitlist_status():
+    """Get a user's waitlist status and position."""
+    data = request.json
+    user_id = data.get('userId') if data else None
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    db = get_firestore_db()
+    if not db:
+        return Response(
+            json.dumps({"error": "Database unavailable"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    try:
+        # Check if user is on waitlist
+        user_doc = db.collection('users').document(user_id).get()
+        if not user_doc.exists:
+            return Response(
+                json.dumps({
+                    "onWaitlist": False,
+                    "reason": "User not found"
+                }),
+                status=200,
+                mimetype='application/json'
+            )
+        
+        user_data = user_doc.to_dict()
+        on_waitlist = user_data.get('onWaitlist', False)
+        
+        if not on_waitlist:
+            return Response(
+                json.dumps({
+                    "onWaitlist": False,
+                    "isPremium": user_data.get('isPremium', False)
+                }),
+                status=200,
+                mimetype='application/json'
+            )
+        
+        # Get position
+        position = get_waitlist_position(user_id)
+        stats = get_waitlist_stats()
+        
+        return Response(
+            json.dumps({
+                "onWaitlist": True,
+                "position": position,
+                "totalWaiting": stats['waitlistUsers'] if stats else 0,
+                "estimatedWait": f"~{max(1, position // 5)} days" if position > 0 else "Unknown"
+            }),
+            status=200,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error getting waitlist status: {e}")
+        return Response(
+            json.dumps({"error": str(e)}),
+            status=500,
+            mimetype='application/json'
+        )
+
+
+@app.route('/api/register-free-user', methods=['POST'])
+def register_free_user():
+    """Register a new free user (increment count). Called after user passes waitlist check."""
+    data = request.json
+    user_id = data.get('userId') if data else None
+    
+    if not user_id:
+        return Response(
+            json.dumps({"error": "userId is required"}),
+            status=400,
+            mimetype='application/json'
+        )
+    
+    db = get_firestore_db()
+    if not db:
+        return Response(
+            json.dumps({"error": "Database unavailable"}),
+            status=500,
+            mimetype='application/json'
+        )
+    
+    try:
+        # Check if user already registered
+        user_doc = db.collection('users').document(user_id).get()
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            if user_data.get('registeredAsFree'):
+                return Response(
+                    json.dumps({"success": True, "alreadyRegistered": True}),
+                    status=200,
+                    mimetype='application/json'
+                )
+        
+        # Mark user as registered free user
+        db.collection('users').document(user_id).set({
+            'registeredAsFree': True,
+            'registeredAt': datetime.now()
+        }, merge=True)
+        
+        # Increment free user count
+        increment_user_count('freeUsers', 1)
+        
+        return Response(
+            json.dumps({"success": True}),
+            status=200,
+            mimetype='application/json'
+        )
+    except Exception as e:
+        print(f"Error registering free user: {e}")
+        return Response(
+            json.dumps({"error": str(e)}),
             status=500,
             mimetype='application/json'
         )
