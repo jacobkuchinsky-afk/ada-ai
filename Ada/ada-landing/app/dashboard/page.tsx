@@ -66,14 +66,41 @@ export default function DashboardPage() {
     setFastMode(prev => !prev);
   }, []);
 
+  // Check authentication and waitlist status
   useEffect(() => {
-    if (!loading) {
+    const checkAccess = async () => {
+      if (loading) return;
+      
       if (!user) {
         router.push('/signup');
-      } else if (!user.emailVerified) {
-        router.push('/verify-email');
+        return;
       }
-    }
+      
+      if (!user.emailVerified) {
+        router.push('/verify-email');
+        return;
+      }
+      
+      // Check if user is on waitlist
+      try {
+        const API_URL_CHECK = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+        const response = await fetch(`${API_URL_CHECK}/api/waitlist-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.uid }),
+        });
+        
+        const data = await response.json();
+        if (data.onWaitlist) {
+          router.push('/waitlist');
+        }
+      } catch (error) {
+        // On error, allow access (fail open)
+        console.error('Error checking waitlist status:', error);
+      }
+    };
+    
+    checkAccess();
   }, [user, loading, router]);
 
   // Load chats on mount (sidebar only - don't auto-load last chat)

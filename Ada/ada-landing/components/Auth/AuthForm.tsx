@@ -30,7 +30,11 @@ export default function AuthForm() {
         if (!username.trim()) {
           throw new Error('Username is required');
         }
-        await signup(email, password, username);
+        const result = await signup(email, password, username);
+        // Store waitlist status for after email verification
+        if (result.shouldWaitlist) {
+          sessionStorage.setItem('pendingWaitlist', 'true');
+        }
         router.push('/verify-email');
       } else if (mode === 'login') {
         await login(email, password);
