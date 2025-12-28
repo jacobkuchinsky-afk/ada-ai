@@ -64,7 +64,11 @@
   font-weight: 700;
   letter-spacing: 0.02em;
   margin-top: 4px;
-  text-shadow: 0 0 20px rgba(255, 255, 255, 0.15), 0 0 40px rgba(255, 255, 255, 0.08);
+  text-shadow: 
+    -1px -1px 0 rgba(60, 60, 60, 0.2),
+    1px -1px 0 rgba(60, 60, 60, 0.2),
+    -1px 1px 0 rgba(60, 60, 60, 0.2),
+    1px 1px 0 rgba(60, 60, 60, 0.2);
 }
 
 .buttons {
