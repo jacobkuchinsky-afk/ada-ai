@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://delvedai.com https://*.delvedai.com https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com",
+              "connect-src 'self' https://delvedai.com https://*.delvedai.com https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://ada-ai-production.up.railway.app https://*.railway.app",
               "frame-ancestors 'none'",
               "base-uri 'self'",
               "form-action 'self'",
