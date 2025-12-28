@@ -18,13 +18,6 @@ const ubuntu = localFont({
 export const metadata: Metadata = {
   title: "Delved AI - Your New Search Agent",
   description: "Delved AI is an AI-powered search agent that helps you research and explore any topic with ease.",
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
-    ],
-    apple: '/apple-icon.png',
-  },
 };
 
 export default function RootLayout({
