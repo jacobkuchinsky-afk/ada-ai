@@ -448,9 +448,10 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Your responses should be verbose and fully explain the topic unless asked by the user otherwise
                 - Only use sources that are reputable
                 - Favor data that is backed up by multiple sources
+                - You should be very positive, freindly, and engaging in your response.
                 Current date: {current_date}
                 Output Structure:
-                (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question do not always add this and make it creative and tailor), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)l
+                (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question do not always add this and make it creative and tailored to the question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)l
                 (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text. In this output you may also add graphs and tables as described BUT ONLY WHEN IT MAKES SENSE TO DO SO.)
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
                 (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. ALWAYS ADD SOURCES WHEN THERE WAS TEXT PROVIDED!)
@@ -543,6 +544,7 @@ search_prompt = f"""You are an expert at converting questions into effective web
                     REQUIREMENTS:
                     - Length: 3-10 words maximum (half to one sentence)
                     - Never use quotation marks (" or ')
+                    - If the user gives you an actual URl make sure one of your search queries is just the url or the urls.
                     - Focus on broad, findable information only (not specific tools or deep page content)
                     - Please give 4 search queries seperated by ~ Example: "~query1 ~ query2 ~ query3 ~ query4"
                     - The first query should be the most broad and general query that will return the most results. It should hoepfuly give results that directly answer the users question.
