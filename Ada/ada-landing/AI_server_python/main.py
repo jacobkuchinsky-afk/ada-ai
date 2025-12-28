@@ -480,6 +480,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Use tables for: comparisons, specifications, pricing, statistics, feature lists, timelines
                 - Do NOT use markdown tables with dashes (---), always use §TABLE§ format
                 - IMPORTANT: Use exactly §TABLE§ to start and §/TABLE§ to end (with the § symbol)
+                - For items like collums NEVER use | use tables instead. 
                 
                 GRAPHS: When presenting numerical data, trends, comparisons, or relationships that would benefit from visual representation, use the special graph syntax:
                 §GRAPH§
