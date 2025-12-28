@@ -236,7 +236,7 @@ function DataTable({ tableContent }: { tableContent: string }) {
   const tableData = parseTableData(tableContent);
   
   if (!tableData || tableData.headers.length === 0) {
-    return <div className={styles.tableError}>Unable to parse table</div>;
+    return <div className={styles.tableError}>Unable to display table</div>;
   }
   
   return (
@@ -329,7 +329,7 @@ function InlineImage({ src }: { src: string }) {
           <line x1="9" y1="9" x2="15" y2="15"/>
           <line x1="15" y1="9" x2="9" y2="15"/>
         </svg>
-        <span>Image failed to load</span>
+        <span>Image unavailable</span>
       </div>
     );
   }
@@ -390,13 +390,13 @@ function DataGraph({ graphContent }: { graphContent: string }) {
     console.error('Failed to parse graph. Raw content:', graphContent);
     return (
       <div className={styles.graphError}>
-        Unable to parse graph data. Check browser console for details.
+        Unable to display graph
       </div>
     );
   }
   
   if (graphData.data.length === 0) {
-    return <div className={styles.graphError}>Graph has no data points</div>;
+    return <div className={styles.graphError}>Unable to display graph</div>;
   }
   
   const { type, title, xAxis, yAxis, data, series } = graphData;
@@ -532,7 +532,7 @@ function DataGraph({ graphContent }: { graphContent: string }) {
           </ScatterChart>
         );
       default:
-        return <div className={styles.graphError}>Unknown graph type: {type}</div>;
+        return <div className={styles.graphError}>Unable to display graph</div>;
     }
   };
   

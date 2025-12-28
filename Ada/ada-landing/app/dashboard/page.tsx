@@ -309,9 +309,8 @@ export default function DashboardPage() {
           };
           setChats((prev) => [newChatPreview, ...prev]);
         } catch (createErr) {
-          const errMsg = (createErr as Error).message || 'Unknown error creating chat';
           console.error('Error creating chat:', createErr);
-          setSaveError(errMsg);
+          setSaveError('Unable to save chat. Please try again.');
           return;
         }
       }
@@ -553,10 +552,8 @@ export default function DashboardPage() {
                       console.log('[SAVE DEBUG] Chat saved successfully');
                       setSaveError(null); // Clear any previous error on success
                     } catch (saveErr) {
-                      const errMsg = (saveErr as Error).message || 'Unknown error';
                       console.error('[SAVE DEBUG] Save failed with error:', saveErr);
-                      console.error('[SAVE DEBUG] Error message to display:', errMsg);
-                      setSaveError(errMsg);
+                      setSaveError('Unable to save chat. Please try again.');
                     }
                   } else {
                     console.warn('[SAVE DEBUG] Cannot save - missing chatId or user:', { chatId, hasUser: !!user });
@@ -637,16 +634,15 @@ export default function DashboardPage() {
           if (chatId && user) {
             try {
               await updateChat(user.uid, chatId, finalMessages);
-              setSaveError(null); // Clear any previous error on success
-            } catch (saveErr) {
-              const errMsg = (saveErr as Error).message || 'Unknown error';
-              console.error('Error saving chat:', saveErr);
-              setSaveError(errMsg);
-            }
+            setSaveError(null); // Clear any previous error on success
+          } catch (saveErr) {
+            console.error('Error saving chat:', saveErr);
+            setSaveError('Unable to save chat. Please try again.');
           }
-          
-          // Clear streaming ref
-          streamingChatRef.current = { 
+        }
+        
+        // Clear streaming ref
+        streamingChatRef.current = {
             chatId: null, 
             visibleChatId: null,
             messages: [], 
@@ -669,7 +665,7 @@ export default function DashboardPage() {
           m.id === assistantMessageId
             ? {
                 ...m,
-                content: `Sorry, I encountered an error: ${(error as Error).message}. Please make sure the AI server is running on port 5000.`,
+                content: `Something went wrong internally. Please try again in a bit.`,
                 isStreaming: false,
                 currentStatus: null,
               }
@@ -685,15 +681,14 @@ export default function DashboardPage() {
         if (chatId && user) {
           try {
             await updateChat(user.uid, chatId, finalMessages);
-            setSaveError(null); // Clear any previous error on success
-          } catch (saveErr) {
-            const errMsg = (saveErr as Error).message || 'Unknown error';
-            console.error('Error saving chat:', saveErr);
-            setSaveError(errMsg);
-          }
+          setSaveError(null); // Clear any previous error on success
+        } catch (saveErr) {
+          console.error('Error saving chat:', saveErr);
+          setSaveError('Unable to save chat. Please try again.');
         }
-        
-        // Clear streaming ref on error
+      }
+      
+      // Clear streaming ref on error
         streamingChatRef.current = { 
           chatId: null, 
           visibleChatId: null,

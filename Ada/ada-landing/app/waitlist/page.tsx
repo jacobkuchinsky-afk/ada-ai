@@ -94,11 +94,11 @@ export default function WaitlistPage() {
         // Redirect to Stripe checkout
         window.location.href = data.url;
       } else {
-        setError(data.error || 'Failed to start checkout');
+        setError('Something went wrong. Please try again in a bit.');
       }
     } catch (err) {
       console.error('Checkout error:', err);
-      setError('Failed to connect to payment service');
+      setError('Something went wrong. Please try again in a bit.');
     } finally {
       setUpgradeLoading(false);
     }

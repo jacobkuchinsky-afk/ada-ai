@@ -68,11 +68,11 @@ export default function VerifyEmailPage() {
       await resendVerificationEmail();
       setResendSuccess(true);
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to resend email';
+      const errorMessage = err instanceof Error ? err.message : '';
       if (errorMessage.includes('too-many-requests')) {
         setError('Please wait before requesting another email');
       } else {
-        setError(errorMessage);
+        setError('Something went wrong. Please try again in a bit.');
       }
     } finally {
       setResendLoading(false);
