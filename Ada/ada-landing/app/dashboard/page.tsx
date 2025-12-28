@@ -22,8 +22,8 @@ import styles from './dashboard.module.css';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function DashboardPage() {
-  const { user, loading } = useAuth();
-  const { credits, useCredits, refreshCredits } = useCreditsContext();
+  const { user, loading, authFetch, checkWaitlistStatus } = useAuth();
+  const { credits, refreshCredits } = useCreditsContext();
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -81,17 +81,10 @@ export default function DashboardPage() {
         return;
       }
       
-      // Check if user is on waitlist
+      // Check if user is on waitlist (uses authenticated endpoint)
       try {
-        const API_URL_CHECK = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
-        const response = await fetch(`${API_URL_CHECK}/api/waitlist-status`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.uid }),
-        });
-        
-        const data = await response.json();
-        if (data.onWaitlist) {
+        const status = await checkWaitlistStatus();
+        if (status.onWaitlist) {
           router.push('/waitlist');
         }
       } catch (error) {
@@ -101,7 +94,7 @@ export default function DashboardPage() {
     };
     
     checkAccess();
-  }, [user, loading, router]);
+  }, [user, loading, router, checkWaitlistStatus]);
 
   // Load chats on mount (sidebar only - don't auto-load last chat)
   useEffect(() => {
@@ -272,15 +265,8 @@ export default function DashboardPage() {
     async (content: string) => {
       if (!user) return;
 
-      // Check if user has enough credits (2: 1 for prompt, 1 for reply)
+      // Credits are now checked server-side, but we still check client-side for UX
       if (credits < 2) {
-        setShowOutOfCreditsModal(true);
-        return;
-      }
-
-      // Deduct 1 credit for prompt
-      const promptCreditUsed = await useCredits(1);
-      if (!promptCreditUsed) {
         setShowOutOfCreditsModal(true);
         return;
       }
@@ -352,10 +338,14 @@ export default function DashboardPage() {
         // Get previous search context for summarization
         const { previousSearchData, previousUserQuestion } = getPreviousSearchContext();
 
+        // Get auth token for authenticated request
+        const token = await user.getIdToken();
+        
         const response = await fetch(`${API_URL}/api/chat`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
             'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
             'ngrok-skip-browser-warning': 'true', // Bypass ngrok interstitial page
           },
@@ -370,6 +360,13 @@ export default function DashboardPage() {
         });
 
         if (!response.ok) {
+          // Handle insufficient credits (402 Payment Required)
+          if (response.status === 402) {
+            setShowOutOfCreditsModal(true);
+            setIsLoading(false);
+            setStatusMessage('');
+            return;
+          }
           throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -572,12 +569,11 @@ export default function DashboardPage() {
                   // Clear session ID
                   sessionIdRef.current = null;
 
-                  // Deduct credit for response (non-blocking)
+                  // Refresh credits from server (deduction happens server-side)
                   try {
-                    await useCredits(1);
                     await refreshCredits();
                   } catch (creditError) {
-                    console.warn('Credit deduction failed:', creditError);
+                    console.warn('Credit refresh failed:', creditError);
                   }
                 } else if (data.type === 'error') {
                   throw new Error(data.message);
@@ -701,7 +697,7 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     },
-    [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, useCredits, refreshCredits, fastMode]
+    [messages, getMemory, getPreviousSearchContext, currentChatId, user, credits, refreshCredits, fastMode]
   );
 
   // Handle skip search - tells the backend to stop searching and generate response
@@ -713,10 +709,9 @@ export default function DashboardPage() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/skip-search`, {
+      const response = await authFetch(`${API_URL}/api/skip-search`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
           'bypass-tunnel-reminder': 'true', // Bypass localtunnel CAPTCHA
           'ngrok-skip-browser-warning': 'true', // Bypass ngrok interstitial page
         },
@@ -729,7 +724,7 @@ export default function DashboardPage() {
     } catch (error) {
       console.error('Error skipping search:', error);
     }
-  }, []);
+  }, [authFetch]);
 
   if (loading) {
     return (

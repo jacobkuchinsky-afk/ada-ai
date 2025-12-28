@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { 
   User, 
   onAuthStateChanged, 
@@ -29,7 +29,9 @@ interface AuthContextType {
   resendVerificationEmail: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateUsername: (newUsername: string) => Promise<void>;
-  checkWaitlistStatus: (userId: string) => Promise<{ onWaitlist: boolean; position?: number }>;
+  checkWaitlistStatus: () => Promise<{ onWaitlist: boolean; position?: number }>;
+  getIdToken: () => Promise<string | null>;
+  authFetch: (url: string, options?: RequestInit) => Promise<Response>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -47,6 +49,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => unsubscribe();
   }, []);
 
+  /**
+   * Get a fresh Firebase ID token for authenticated API calls.
+   * Returns null if no user is logged in.
+   */
+  const getIdToken = useCallback(async (): Promise<string | null> => {
+    if (!user) return null;
+    try {
+      return await user.getIdToken();
+    } catch (error) {
+      console.error('Error getting ID token:', error);
+      return null;
+    }
+  }, [user]);
+
+  /**
+   * Make an authenticated fetch request to the API.
+   * Automatically includes the Firebase ID token in the Authorization header.
+   */
+  const authFetch = useCallback(async (url: string, options: RequestInit = {}): Promise<Response> => {
+    const token = await getIdToken();
+    
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    };
+    
+    if (token) {
+      (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+    }
+    
+    return fetch(url, {
+      ...options,
+      headers,
+    });
+  }, [getIdToken]);
+
   const signup = async (email: string, password: string, username: string): Promise<WaitlistCheckResult> => {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     
@@ -58,12 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Send verification email
     await sendEmailVerification(userCredential.user);
     
+    // Get token for the newly created user
+    const token = await userCredential.user.getIdToken();
+    const authHeaders = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    };
+    
     // Check if user should be waitlisted
     try {
       const checkResponse = await fetch(`${API_URL}/api/check-waitlist`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: userCredential.user.uid }),
+        headers: authHeaders,
+        body: JSON.stringify({}),  // userId now comes from token
       });
       
       const checkData = await checkResponse.json();
@@ -72,11 +117,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Add user to waitlist
         const joinResponse = await fetch(`${API_URL}/api/join-waitlist`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            userId: userCredential.user.uid,
-            email: email 
-          }),
+          headers: authHeaders,
+          body: JSON.stringify({}),  // userId and email come from token
         });
         
         const joinData = await joinResponse.json();
@@ -85,8 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Register as free user
         await fetch(`${API_URL}/api/register-free-user`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: userCredential.user.uid }),
+          headers: authHeaders,
+          body: JSON.stringify({}),  // userId comes from token
         });
         return { shouldWaitlist: false };
       }
@@ -126,12 +168,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const checkWaitlistStatus = async (userId: string): Promise<{ onWaitlist: boolean; position?: number }> => {
+  const checkWaitlistStatus = useCallback(async (): Promise<{ onWaitlist: boolean; position?: number }> => {
     try {
-      const response = await fetch(`${API_URL}/api/waitlist-status`, {
+      const response = await authFetch(`${API_URL}/api/waitlist-status`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({}),  // userId comes from token
       });
       
       const data = await response.json();
@@ -143,7 +184,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('Error checking waitlist status:', error);
       return { onWaitlist: false };
     }
-  };
+  }, [authFetch]);
 
   const value = {
     user,
@@ -154,7 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     resendVerificationEmail,
     resetPassword,
     updateUsername,
-    checkWaitlistStatus
+    checkWaitlistStatus,
+    getIdToken,
+    authFetch,
   };
 
   return (
