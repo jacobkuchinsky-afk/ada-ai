@@ -32,7 +32,7 @@ export default function ChatInterface({ messages, onSendMessage, isLoading, stat
     return (
       <div className={styles.chatContainer}>
         <div className={styles.emptyState}>
-          <h1 className={styles.adaTitle}>Ada</h1>
+          <h1 className={styles.delvedTitle}>Delved AI</h1>
           <div className={styles.centeredInput}>
             <ChatInput onSubmit={onSendMessage} disabled={isLoading} fastMode={fastMode} onToggleFastMode={onToggleFastMode} />
           </div>

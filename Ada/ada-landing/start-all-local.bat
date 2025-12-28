@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo    Ada AI - Full Local Development
+echo    Delved AI - Full Local Development
 echo ========================================
 echo.
 echo This starts BOTH the Python backend AND Next.js frontend locally.
@@ -12,13 +12,13 @@ echo.
 cd /d "%~dp0"
 
 echo [1/2] Starting Python Backend Server...
-start "Ada Backend" cmd /k "cd AI_server_python && pip install -r requirements.txt -q && echo Backend running on http://localhost:5000 && python main.py"
+start "Delved Backend" cmd /k "cd AI_server_python && pip install -r requirements.txt -q && echo Backend running on http://localhost:5000 && python main.py"
 
 echo Waiting for backend to initialize...
 timeout /t 3 /nobreak >nul
 
 echo [2/2] Starting Next.js Frontend...
-start "Ada Frontend" cmd /k "npm run dev"
+start "Delved Frontend" cmd /k "npm run dev"
 
 echo.
 echo ========================================

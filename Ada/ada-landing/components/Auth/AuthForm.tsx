@@ -85,8 +85,8 @@ export default function AuthForm() {
       </h1>
       
       <p className={styles.subtitle}>
-        {mode === 'signup' && 'Join Ada to start your AI-powered search journey'}
-        {mode === 'login' && 'Sign in to continue with Ada'}
+        {mode === 'signup' && 'Join Delved to start your AI-powered search journey'}
+        {mode === 'login' && 'Sign in to continue with Delved'}
         {mode === 'forgot' && 'Enter your email to receive a reset link'}
       </p>
 

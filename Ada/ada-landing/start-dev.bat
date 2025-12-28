@@ -1,10 +1,10 @@
 @echo off
-title Ada AI Development Server
+title Delved AI Development Server
 color 0A
 
 echo.
 echo ========================================
-echo     ADA AI - Development Server
+echo     DELVED AI - Development Server
 echo ========================================
 echo.
 
@@ -58,7 +58,7 @@ echo [2/3] Starting Flask server on port 5000...
 echo.
 
 :: Start Flask server in background
-start "Ada Flask Server" cmd /k "python main.py"
+start "Delved Flask Server" cmd /k "python main.py"
 
 :: Wait a moment for server to start
 timeout /t 3 /nobreak >nul
@@ -75,7 +75,7 @@ echo.
 ngrok http 5000
 
 :: When ngrok is closed, also close the Flask server
-taskkill /FI "WINDOWTITLE eq Ada Flask Server*" /F >nul 2>nul
+taskkill /FI "WINDOWTITLE eq Delved Flask Server*" /F >nul 2>nul
 
 echo.
 echo Server stopped.

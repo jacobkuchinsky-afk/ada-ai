@@ -16,8 +16,8 @@ const ubuntu = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Ada - Your New Search Agent",
-  description: "Ada is an AI-powered search agent that helps you research and explore any topic with ease.",
+  title: "Delved AI - Your New Search Agent",
+  description: "Delved AI is an AI-powered search agent that helps you research and explore any topic with ease.",
 };
 
 export default function RootLayout({

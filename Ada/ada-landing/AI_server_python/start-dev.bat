@@ -1,6 +1,6 @@
 @echo off
 echo ========================================
-echo    Ada AI - Local Development Server
+echo    Delved AI - Local Development Server
 echo ========================================
 echo.
 

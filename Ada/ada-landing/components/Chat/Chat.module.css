@@ -7,7 +7,7 @@
   background: var(--background);
 }
 
-/* Empty State - Ada Title + Centered Input */
+/* Empty State - Delved AI Title + Centered Input */
 .emptyState {
   flex: 1;
   display: flex;
@@ -17,7 +17,7 @@
   padding: 24px;
 }
 
-.adaTitle {
+.delvedTitle {
   font-family: var(--font-coiny), cursive;
   font-size: clamp(42px, 8vw, 64px);
   font-weight: 400;
