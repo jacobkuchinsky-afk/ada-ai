@@ -6,6 +6,7 @@ import threading
 import uuid
 import base64
 import traceback
+import random
 from flask import Flask, request, Response, stream_with_context
 from flask_cors import CORS
 from datetime import date, datetime, timedelta
@@ -16,6 +17,64 @@ import concurrent.futures
 import stripe
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+
+# Human-like status message options
+GENERATING_MESSAGES = [
+    "Typing something up",
+    "Pressing some buttons",
+    "Dusting off my keyboard"
+]
+
+THINKING_MESSAGES = [
+    "Taking a drink of water",
+    "Eating some chips",
+    "Stretching",
+    "Cracking my knuckles",
+    "Looking out the window",
+    "Adjusting my chair",
+    "Taking a deep breath",
+    "Rubbing my eyes",
+    "Checking my phone",
+    "Sipping some coffee",
+    "Yawning",
+    "Scratching my head",
+    "Staring at the ceiling",
+    "Twirling a pen",
+    "Leaning back in my chair",
+    "Tapping my fingers",
+    "Humming a tune",
+    "Daydreaming briefly"
+]
+
+SEARCHING_MESSAGES = [
+    "Reading search results",
+    "Cleaning my glasses",
+    "Squinting at the screen"
+]
+
+
+def get_status_message(status_type: str) -> str:
+    """Get a random status message for the given type."""
+    if status_type == "generating":
+        return random.choice(GENERATING_MESSAGES)
+    elif status_type == "searching":
+        return random.choice(SEARCHING_MESSAGES)
+    else:  # thinking, evaluating, or anything else
+        return random.choice(THINKING_MESSAGES)
+
+
+def get_status_with_cycle_options(status_type: str) -> dict:
+    """Get status message info with cycle options for frontend."""
+    message = get_status_message(status_type)
+    result = {"message": message}
+    
+    # For thinking/evaluating, include all options so frontend can cycle
+    if status_type in ("thinking", "evaluating", "processing"):
+        result["cycleMessages"] = THINKING_MESSAGES
+        result["cycleInterval"] = 4000  # 4 seconds
+    
+    return result
 
 
 # Thread-safe dict to track skip search requests by session_id
@@ -550,11 +609,14 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
     summary_future = None  # Future for parallel summarization
     
     # Yield immediate status so frontend knows we're processing
+    status_info = get_status_with_cycle_options("thinking")
     yield {
         "type": "status", 
-        "message": "Processing...", 
+        "message": status_info["message"], 
         "step": 0, 
-        "icon": "thinking"
+        "icon": "thinking",
+        "cycleMessages": status_info.get("cycleMessages"),
+        "cycleInterval": status_info.get("cycleInterval")
     }
     
     # Compress memory if it has 7+ conversation pairs (this may block if compression needed)
@@ -562,11 +624,14 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
     
     # Check if this is a follow-up that needs searching
     if memory:
+        status_info = get_status_with_cycle_options("thinking")
         yield {
             "type": "status", 
-            "message": "Checking if search needed...", 
+            "message": status_info["message"], 
             "step": 0, 
-            "icon": "thinking"
+            "icon": "thinking",
+            "cycleMessages": status_info.get("cycleMessages"),
+            "cycleInterval": status_info.get("cycleInterval")
         }
         if_search = ai(
             "User question: " + prompt,
@@ -598,7 +663,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         if in_goodness_loop and session_id and check_skip_search(session_id):
             yield {
                 "type": "status",
-                "message": "Search skipped by user, generating response...",
+                "message": get_status_message("generating"),
                 "step": 3,
                 "icon": "thinking",
                 "canSkip": False
@@ -606,12 +671,15 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             break
         
         # Step 1: Generate search query - canSkip only after first search (goodness loop)
+        status_info = get_status_with_cycle_options("thinking")
         yield {
             "type": "status", 
-            "message": "Thinking...", 
+            "message": status_info["message"], 
             "step": 1, 
             "icon": "thinking",
-            "canSkip": in_goodness_loop  # Only allow skip in goodness loop (iter > 0)
+            "canSkip": in_goodness_loop,  # Only allow skip in goodness loop (iter > 0)
+            "cycleMessages": status_info.get("cycleMessages"),
+            "cycleInterval": status_info.get("cycleInterval")
         }
         
         if iter_count > 0 and not service_failure_detected:
@@ -668,7 +736,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         if in_goodness_loop and session_id and check_skip_search(session_id):
             yield {
                 "type": "status",
-                "message": "Search skipped by user, generating response...",
+                "message": get_status_message("generating"),
                 "step": 3,
                 "icon": "thinking",
                 "canSkip": False
@@ -680,7 +748,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         for q_idx, q in enumerate(queries):
             yield {
                 "type": "status", 
-                "message": f"Searching ({q_idx + 1}/{len(queries)}): {q[:50]}{'...' if len(q) > 50 else ''}", 
+                "message": get_status_message("searching"), 
                 "step": 2, 
                 "icon": "searching",
                 "canSkip": in_goodness_loop  # Only allow skip in goodness loop
@@ -773,11 +841,14 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
         if service_failure_detected:
             searching = False
             no_search = True  # Fall back to AI knowledge
+            status_info = get_status_with_cycle_options("thinking")
             yield {
                 "type": "status",
-                "message": "Search service unavailable, using AI knowledge...",
+                "message": status_info["message"],
                 "step": 3,
-                "icon": "thinking"
+                "icon": "thinking",
+                "cycleMessages": status_info.get("cycleMessages"),
+                "cycleInterval": status_info.get("cycleInterval")
             }
             break
         
@@ -786,19 +857,22 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             searching = False
             yield {
                 "type": "status",
-                "message": "Search skipped by user, generating response...",
+                "message": get_status_message("generating"),
                 "step": 3,
                 "icon": "thinking"
             }
             break
         
         # Step 3: Evaluate results - canSkip only in goodness loop
+        status_info = get_status_with_cycle_options("evaluating")
         yield {
             "type": "status", 
-            "message": "Evaluating search results...", 
+            "message": status_info["message"], 
             "step": 3, 
             "icon": "evaluating",
-            "canSkip": in_goodness_loop  # Only allow skip in goodness loop
+            "canSkip": in_goodness_loop,  # Only allow skip in goodness loop
+            "cycleMessages": status_info.get("cycleMessages"),
+            "cycleInterval": status_info.get("cycleInterval")
         }
         
         # Check again after yielding (user may have clicked skip while status was shown)
@@ -806,7 +880,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             searching = False
             yield {
                 "type": "status",
-                "message": "Search skipped by user, generating response...",
+                "message": get_status_message("generating"),
                 "step": 3,
                 "icon": "thinking"
             }
@@ -831,7 +905,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
             searching = False
             yield {
                 "type": "status",
-                "message": "Search skipped by user, generating response...",
+                "message": get_status_message("generating"),
                 "step": 3,
                 "icon": "thinking"
             }
@@ -875,7 +949,7 @@ def process_search(prompt, memory, previous_search_data=None, previous_user_ques
     # Step 4: Generate final response with streaming
     yield {
         "type": "status", 
-        "message": "Generating response...", 
+        "message": get_status_message("generating"), 
         "step": 4, 
         "icon": "generating"
     }
