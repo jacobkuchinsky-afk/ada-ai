@@ -19,14 +19,6 @@
   gap: 40px;
 }
 
-.title {
-  font-family: var(--font-coiny), cursive;
-  font-size: clamp(28px, 4vw, 44px);
-  font-weight: 400;
-  color: var(--foreground);
-  letter-spacing: 0.01em;
-}
-
 .contentBox {
   width: 100%;
   background: rgba(18, 18, 18, 0.6);
@@ -34,22 +26,52 @@
   border-radius: 16px;
   padding: 56px 48px;
   backdrop-filter: blur(8px);
-}
-
-.textArea {
-  min-height: 180px;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 48px;
 }
 
-.placeholder {
+.section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+}
+
+.sectionTitle {
+  font-family: var(--font-coiny), cursive;
+  font-size: clamp(24px, 3.5vw, 36px);
+  font-weight: 400;
+  color: var(--foreground);
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+.sectionText {
   font-family: var(--font-ubuntu), sans-serif;
   color: var(--text-secondary);
   font-size: 16px;
-  text-align: center;
   line-height: 1.7;
   font-weight: 500;
+  max-width: 520px;
+  margin: 0;
+}
+
+.divider {
+  width: 60%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.1) 50%,
+    transparent 100%
+  );
+  margin: 0 auto;
+}
+
+.buttonWrapper {
+  margin-top: 16px;
 }
 
 @media (max-width: 768px) {
@@ -60,9 +82,19 @@
   .contentBox {
     padding: 40px 28px;
     border-radius: 12px;
+    gap: 36px;
   }
   
   .container {
     gap: 28px;
+  }
+  
+  .section {
+    gap: 12px;
+  }
+  
+  .buttonWrapper {
+    margin-top: 12px;
+    width: 100%;
   }
 }
