@@ -212,6 +212,13 @@ def get_firestore_db():
 # AUTHENTICATION MIDDLEWARE
 # =============================================================================
 
+def ensure_firebase_initialized():
+    """Ensure Firebase Admin SDK is initialized for auth verification."""
+    global _firebase_initialized
+    if not _firebase_initialized:
+        # This will initialize Firebase if not already done
+        get_firestore_db()
+
 def require_auth(f):
     """Decorator that verifies Firebase ID tokens for authenticated endpoints.
     
@@ -220,9 +227,13 @@ def require_auth(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
+        # Ensure Firebase is initialized before verifying tokens
+        ensure_firebase_initialized()
+        
         auth_header = request.headers.get('Authorization', '')
         
         if not auth_header.startswith('Bearer '):
+            logger.warning("Auth failed: Missing or invalid Authorization header")
             return Response(
                 json.dumps({"error": "Missing or invalid authentication token"}),
                 status=401,
@@ -231,26 +242,38 @@ def require_auth(f):
         
         token = auth_header.split('Bearer ')[1]
         
+        # Check if Firebase was successfully initialized
+        if not _firebase_initialized or not firebase_admin._apps:
+            logger.error("Auth failed: Firebase Admin SDK not initialized")
+            return Response(
+                json.dumps({"error": "Authentication service unavailable"}),
+                status=503,
+                mimetype='application/json'
+            )
+        
         try:
             # Verify the Firebase ID token
             decoded_token = firebase_auth.verify_id_token(token)
             # Attach the verified user ID to flask.g for use in the endpoint
             g.uid = decoded_token['uid']
             g.email = decoded_token.get('email', '')
-        except firebase_auth.InvalidIdTokenError:
+            logger.debug(f"Auth successful for user {g.uid[:8]}...")
+        except firebase_auth.InvalidIdTokenError as e:
+            logger.warning(f"Auth failed: Invalid token - {e}")
             return Response(
                 json.dumps({"error": "Invalid authentication token"}),
                 status=401,
                 mimetype='application/json'
             )
         except firebase_auth.ExpiredIdTokenError:
+            logger.warning("Auth failed: Token expired")
             return Response(
                 json.dumps({"error": "Authentication token expired"}),
                 status=401,
                 mimetype='application/json'
             )
         except Exception as e:
-            logger.warning(f"Auth token verification failed: {e}")
+            logger.error(f"Auth token verification failed: {type(e).__name__}: {e}")
             return Response(
                 json.dumps({"error": "Authentication failed"}),
                 status=401,
@@ -357,6 +380,19 @@ limiter = Limiter(
 )
 
 # =============================================================================
+# INITIALIZE FIREBASE AT MODULE LOAD (for gunicorn)
+# =============================================================================
+
+# Initialize Firebase Admin SDK when module is imported
+# This ensures it's ready before any requests come in
+logger.info("[Module Load] Initializing Firebase Admin SDK...")
+_init_db = get_firestore_db()
+if _init_db:
+    logger.info("[Module Load] Firebase Admin SDK initialized successfully")
+else:
+    logger.warning("[Module Load] Firebase Admin SDK not available - check FIREBASE_SERVICE_ACCOUNT env var")
+
+# =============================================================================
 # SECURITY HEADERS
 # =============================================================================
 
@@ -414,7 +450,7 @@ main_prompt = f"""Job: You have been given large text from multiple sources. You
                 - Favor data that is backed up by multiple sources
                 Current date: {current_date}
                 Output Structure:
-                (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
+                (First add an introduction this should be freindly and short/concise 1-2 sentences. It should introduce the subject. Format: %Give a positive remark about the users question (A couple of words maybe telling them that it is a great idea or question do not always add this and make it creative and tail), %tell them a very breif summary of what you found (Half a sentence) %Flow into the sentence basic example : Here is some information that will be helpful. Make sure to fit the example to the question)
                 (Next add a verbose output of all important information found in the text that may help answer or fufil the users question. Format: It is recomened to use bullet points, lists, and readable paragraph spacing for user readibilty. Make sure that this section fully answers the user question 100%. Make sure to include specific facts, quotes, and numerical data if it both pertains to the user question and is provided in the text. In this output you may also add graphs and tables as described BUT ONLY WHEN IT MAKES SENSE TO DO SO.)
                 (Then add a conclsion Format: Give the user an example of another question they could ask and how you could possibly expand you response)
                 (Finally add all sources exactly as provided in the text. Format: Add Sources: The the hyperlinks where the text is the name of the sources and the link is the exact link to the sources follow the hyperlink guide for details. ALWAYS ADD SOURCES WHEN THERE WAS TEXT PROVIDED!)
@@ -2133,5 +2169,14 @@ def health():
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
     debug = os.getenv('FLASK_DEBUG', 'false').lower() == 'true'
+    
+    # Initialize Firebase Admin SDK at startup
+    logger.info("[Startup] Initializing Firebase Admin SDK...")
+    db = get_firestore_db()
+    if db:
+        logger.info("[Startup] Firebase Admin SDK ready")
+    else:
+        logger.warning("[Startup] Firebase Admin SDK not available - auth will fail")
+    
     logger.info(f"[Startup] Server starting on port {port}, debug={debug}")
     app.run(host='0.0.0.0', port=port, debug=debug, threaded=True)
