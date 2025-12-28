@@ -32,8 +32,8 @@ export default function VerifyEmailPage() {
         return;
       }
       
-      // Double-check with API
-      const status = await checkWaitlistStatus(user.uid);
+      // Double-check with API (userId comes from auth token)
+      const status = await checkWaitlistStatus();
       if (status.onWaitlist) {
         router.push('/waitlist');
       } else {
