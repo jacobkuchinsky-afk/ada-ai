@@ -4,15 +4,19 @@ from urllib3.util.retry import Retry
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, unquote, urljoin
 import re
+import logging
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
 
 # Try to use ddgs package (more reliable than HTML scraping)
 try:
     from ddgs import DDGS
     USE_DDGS = True
-    print("DDGS search enabled")
+    logger.info("DDGS search enabled")
 except ImportError:
     USE_DDGS = False
-    print("Warning: ddgs not installed, falling back to HTML scraping")
+    logger.warning("ddgs not installed, falling back to HTML scraping")
 
 
 def create_session():
@@ -50,7 +54,7 @@ def extract_domain(url):
         if domain.startswith('www.'):
             domain = domain[4:]
         return domain
-    except:
+    except Exception:
         return url
 
 
@@ -275,7 +279,7 @@ def search_ddgs(query, num_results):
             results = list(ddgs.text(query, max_results=num_results))
             return [{'url': r['href'], 'title': r['title']} for r in results], True
     except Exception as e:
-        print(f"DDGS search failed: {e}")
+        logger.warning(f"DDGS search failed: {e}")
         return [], False
 
 
@@ -302,13 +306,13 @@ def search_html_fallback(query, num_results, session):
         soup.decompose()
         return links, True
     except requests.exceptions.Timeout:
-        print(f"Search timeout for query: {query}")
+        logger.warning(f"Search timeout for query")
         return [], False
     except requests.exceptions.ConnectionError:
-        print(f"Search connection error for query: {query}")
+        logger.warning(f"Search connection error for query")
         return [], False
     except Exception as e:
-        print(f"Search failed: {e}")
+        logger.warning(f"Search failed: {e}")
         return [], False
 
 
@@ -366,14 +370,14 @@ def search_and_scrape(search, result_number):
             'service_available': True
         }
     
-    print(f"Found {len(links)} links to scrape")
+    logger.debug(f"Found {len(links)} links to scrape")
     
     # Step 2: Scrape each website
     with create_session() as session:
         session.headers.update(headers)
         
         for i, url in enumerate(links[:result_number]):
-            print(f"Scraping {i+1}/{min(len(links), result_number)}: {url}")
+            logger.debug(f"Scraping {i+1}/{min(len(links), result_number)}: {url[:50]}...")
             try:
                 page_response = session.get(url, timeout=10, allow_redirects=True)
                 page_response.raise_for_status()
@@ -412,7 +416,7 @@ def search_and_scrape(search, result_number):
                 del page_soup, page_response
                 
             except Exception as e:
-                print(f"Error scraping {url}: {str(e)}")
+                logger.warning(f"Error scraping URL: {e}")
                 # Still add the source even if scraping failed
                 sources.append({
                     'url': url,

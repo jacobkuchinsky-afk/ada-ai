@@ -11,7 +11,7 @@ import styles from './profile.module.css';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
 
 export default function ProfilePage() {
-  const { user, loading, logout, updateUsername } = useAuth();
+  const { user, loading, logout, updateUsername, authFetch } = useAuth();
   const { credits, maxCredits, isPremium, premiumExpiresAt } = useCreditsContext();
   const router = useRouter();
   const [isEditing, setIsEditing] = useState(false);
@@ -45,15 +45,10 @@ export default function ProfilePage() {
     setError('');
     
     try {
-      const response = await fetch(`${API_URL}/api/create-checkout`, {
+      // Use authenticated fetch - userId and email come from token
+      const response = await authFetch(`${API_URL}/api/create-checkout`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.uid,
-          email: user.email,
-        }),
+        body: JSON.stringify({}),
       });
       
       const data = await response.json();

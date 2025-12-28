@@ -1,11 +1,31 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import styles from './AuthForm.module.css';
 
 type AuthMode = 'login' | 'signup' | 'forgot';
+
+/**
+ * Validate password strength and return hints.
+ * Returns null if password is strong enough.
+ */
+function validatePassword(password: string): string | null {
+  if (password.length < 8) {
+    return 'Password must be at least 8 characters';
+  }
+  if (!/[A-Z]/.test(password)) {
+    return 'Include at least one uppercase letter';
+  }
+  if (!/[a-z]/.test(password)) {
+    return 'Include at least one lowercase letter';
+  }
+  if (!/[0-9]/.test(password)) {
+    return 'Include at least one number';
+  }
+  return null;
+}
 
 export default function AuthForm() {
   const [mode, setMode] = useState<AuthMode>('signup');
@@ -19,6 +39,12 @@ export default function AuthForm() {
   const { signup, login, resetPassword } = useAuth();
   const router = useRouter();
 
+  // Password strength validation (only shown for signup)
+  const passwordHint = useMemo(() => {
+    if (mode !== 'signup' || password.length === 0) return null;
+    return validatePassword(password);
+  }, [password, mode]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -30,6 +56,13 @@ export default function AuthForm() {
         if (!username.trim()) {
           throw new Error('Username is required');
         }
+        
+        // Check password strength before submitting
+        const pwError = validatePassword(password);
+        if (pwError) {
+          throw new Error(pwError);
+        }
+        
         const result = await signup(email, password, username);
         // Store waitlist status for after email verification
         if (result.shouldWaitlist) {
@@ -133,8 +166,12 @@ export default function AuthForm() {
               placeholder="Enter your password"
               required
               disabled={loading}
-              minLength={6}
+              minLength={8}
             />
+            {/* Password strength hint for signup */}
+            {mode === 'signup' && passwordHint && (
+              <p className={styles.passwordHint}>{passwordHint}</p>
+            )}
           </div>
         )}
 

@@ -75,6 +75,15 @@
   cursor: not-allowed;
 }
 
+.passwordHint {
+  font-family: var(--font-ubuntu), sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 183, 77, 0.9);
+  margin: 0;
+  margin-top: -4px;
+}
+
 .error {
   font-family: var(--font-ubuntu), sans-serif;
   font-size: 13px;
