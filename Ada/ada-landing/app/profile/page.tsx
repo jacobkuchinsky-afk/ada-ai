@@ -62,11 +62,11 @@ export default function ProfilePage() {
         // Redirect to Stripe checkout
         window.location.href = data.url;
       } else {
-        setError(data.error || 'Failed to start checkout');
+        setError('Something went wrong. Please try again in a bit.');
       }
     } catch (err) {
       console.error('Checkout error:', err);
-      setError('Failed to connect to payment service');
+      setError('Something went wrong. Please try again in a bit.');
     } finally {
       setUpgradeLoading(false);
     }
@@ -86,7 +86,7 @@ export default function ProfilePage() {
 
   const handleSaveUsername = async () => {
     if (!newUsername.trim()) {
-      setError('Username cannot be empty');
+      setError('Please enter a username');
       return;
     }
 
@@ -99,7 +99,7 @@ export default function ProfilePage() {
       setIsEditing(false);
       setTimeout(() => setSuccess(''), 3000);
     } catch {
-      setError('Failed to update username');
+      setError('Something went wrong. Please try again in a bit.');
     } finally {
       setUpdateLoading(false);
     }

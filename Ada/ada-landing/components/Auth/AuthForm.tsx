@@ -63,7 +63,7 @@ export default function AuthForm() {
       } else if (errorMessage.includes('auth/wrong-password') || errorMessage.includes('auth/invalid-credential')) {
         setError('Incorrect email or password');
       } else {
-        setError(errorMessage);
+        setError('Something went wrong. Please try again in a bit.');
       }
     } finally {
       setLoading(false);
