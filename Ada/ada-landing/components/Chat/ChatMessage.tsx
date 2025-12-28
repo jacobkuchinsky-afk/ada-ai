@@ -590,7 +590,7 @@ export default function ChatMessage({ message, onSkipSearch }: ChatMessageProps)
     <div className={`${styles.message} ${isUser ? styles.userMessage : styles.assistantMessage}`}>
       <div className={styles.messageHeader}>
         <span className={styles.messageRole}>
-          {isUser ? 'You' : 'Ada'}
+          {isUser ? 'You' : 'Delved'}
         </span>
       </div>
       
