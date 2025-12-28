@@ -773,7 +773,9 @@ export default function DashboardPage() {
             className={styles.saveErrorClose}
             aria-label="Dismiss error"
           >
-            ×
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+              <path d="M5 7 L7 5 L12 10 L17 5 L19 7 L14 12 L19 17 L17 19 L12 14 L7 19 L5 17 L10 12 Z"/>
+            </svg>
           </button>
         </div>
       )}

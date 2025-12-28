@@ -97,7 +97,18 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
           onClick={onSkipSearch}
           type="button"
         >
-          ⏭ Skip & Generate
+          <svg 
+            xmlns="http://www.w3.org/2000/svg" 
+            viewBox="0 0 24 24" 
+            fill="currentColor"
+            width="14"
+            height="14"
+            style={{ marginRight: '6px' }}
+          >
+            <path d="M5 6 Q5 5 6 5 L12.5 10.2 Q13.5 11 12.5 11.8 L6 19 Q5 19 5 18 Z"/>
+            <path d="M11 6 Q11 5 12 5 L18.5 10.2 Q19.5 11 18.5 11.8 L12 19 Q11 19 11 18 Z"/>
+          </svg>
+          Skip & Generate
         </button>
       )}
       
@@ -139,7 +150,15 @@ export default function SearchStatus({ searchHistory, isStreaming, canSkip, onSk
                 )}
                 {!isSearching && (
                   <span className={styles.expandIcon}>
-                    {isExpanded ? '▼' : '▶'}
+                    {isExpanded ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                        <path d="M7 8 Q6 8 6.6 9 L11.2 16 Q12 17.2 12.8 16 L17.4 9 Q18 8 17 8 Z"/>
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                        <path d="M7 5 Q7 4 8 4 L17 10.5 Q18 11.2 17 11.9 L8 20 Q7 20 7 19 Z"/>
+                      </svg>
+                    )}
                   </span>
                 )}
               </button>
